@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bass Scale Trainer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0d1117;
+      --surf:   #161b22;
+      --surf2:  #21262d;
+      --border: #30363d;
+      --text:   #f0f6fc;
+      --muted:  #8b949e;
+      --accent: #58a6ff;
+      --aglow:  rgba(88,166,255,0.25);
+      --c0: #21262d;
+      --c1: #da3633;  --c1d: #3d1a17;
+      --c2: #e3b341;  --c2d: #3a2c00;
+      --c3: #3fb950;  --c3d: #1a3a1c;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* ═══════════════════════════════════════
+       STAGE — key + variation only (no rhythm box)
+    ═══════════════════════════════════════ */
+    .stage {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 18px 32px 14px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #111827 0%, var(--bg) 100%);
+    }
+
+    /* Key row: ▲/▼ stacked left, key name centre */
+    .key-row { display: flex; align-items: center; gap: 14px; }
+
+    .key-nav-v { display: flex; flex-direction: column; gap: 6px; }
+
+    .nav-btn-v {
+      width: 40px; height: 48px;
+      background: var(--surf2); border: 1px solid var(--border);
+      color: var(--muted); border-radius: 8px; font-size: 16px;
+      cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .nav-btn-v:hover { color: var(--accent); border-color: var(--accent); background: var(--surf); }
+
+    .key-center { text-align: center; min-width: 180px; }
+    .key-name {
+      font-size: 116px; font-weight: 800; line-height: 1; letter-spacing: -4px;
+      background: linear-gradient(135deg, #f0f6fc 50%, var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .key-sub {
+      font-size: 16px; color: var(--muted);
+      letter-spacing: 6px; text-transform: uppercase; margin-top: -2px;
+    }
+
+    /* Variation row: ◀/▶ flanking the name */
+    .var-row { display: flex; align-items: center; gap: 12px; }
+
+    .var-btn {
+      width: 40px; height: 48px;
+      background: var(--surf2); border: 1px solid var(--border);
+      color: var(--muted); border-radius: 8px; font-size: 16px;
+      cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .var-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--surf); }
+
+    .var-name  { font-size: 38px; font-weight: 600; }
+    .var-index { font-size: 16px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+    /* ═══════════════════════════════════════
+       CONTROLS — metro | rhythm ctl | comfort | stats
+    ═══════════════════════════════════════ */
+    .controls {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 22px;
+      padding: 10px 32px;
+      background: var(--surf); border-bottom: 1px solid var(--border);
+    }
+
+    /* Beat */
+    .beat {
+      width: 66px; height: 66px; border-radius: 50%; flex-shrink: 0;
+      background: var(--surf2); border: 3px solid var(--border);
+      transition: background .07s, box-shadow .07s, border-color .07s;
+    }
+    .beat.on {
+      background: var(--accent); border-color: var(--accent);
+      box-shadow: 0 0 0 6px var(--aglow), 0 0 32px var(--aglow);
+    }
+
+    /* BPM */
+    .bpm-col { display: flex; flex-direction: column; align-items: center; }
+    .bpm-num { font-size: 62px; font-weight: 700; line-height: 1; }
+    .bpm-lbl { font-size: 13px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; }
+
+    /* Play / mute pills */
+    .pill-col { display: flex; flex-direction: column; gap: 6px; }
+    .pill {
+      font-size: 14px; letter-spacing: 1px; font-weight: 500;
+      padding: 5px 14px; border-radius: 20px; border: 1px solid;
+      cursor: pointer; text-align: center; white-space: nowrap; transition: all .15s;
+    }
+    .pill.playing  { color: var(--c3); border-color: var(--c3); }
+    .pill.stopped  { color: var(--muted); border-color: var(--border); }
+    .pill.sounding { color: var(--muted); border-color: var(--border); }
+    .pill.muted    { color: var(--c1); border-color: var(--c1); }
+
+    .sep { width: 1px; height: 66px; background: var(--border); flex-shrink: 0; }
+
+    /* ── Rhythm control (moved here from stage) ── */
+    .rhythm-ctl {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 20px;
+      background: var(--surf2); border: 1px solid var(--border); border-radius: 12px;
+      cursor: pointer; transition: border-color .15s; flex-shrink: 0;
+    }
+    .rhythm-ctl:hover { border-color: var(--accent); }
+    .rhythm-ctl-sym  { font-size: 38px; line-height: 1; color: var(--accent); }
+    .rhythm-ctl-name { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; }
+    .rhythm-ctl-hint { font-size: 10px; color: var(--muted); opacity: .45; letter-spacing: 1px; }
+
+    /* Comfort traffic lights */
+    .comfort-group       { display: flex; align-items: center; gap: 14px; }
+    .comfort-lbl         { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
+    .comfort-lights-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .lights              { display: flex; align-items: center; gap: 10px; }
+
+    .light {
+      width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; cursor: pointer;
+      border: 3px solid transparent; transition: all .2s;
+    }
+    .light.c1-off { background: var(--c1d); color: rgba(255,255,255,.25); }
+    .light.c2-off { background: var(--c2d); color: rgba(255,255,255,.25); }
+    .light.c3-off { background: var(--c3d); color: rgba(255,255,255,.25); }
+    .light.c1-on  { background: var(--c1); border-color: #ff9e9d; color: #fff; box-shadow: 0 0 18px rgba(218,54,51,.55); }
+    .light.c2-on  { background: var(--c2); border-color: #ffe08a; color: #fff; box-shadow: 0 0 18px rgba(227,179,65,.55); }
+    .light.c3-on  { background: var(--c3); border-color: #8ef09e; color: #fff; box-shadow: 0 0 18px rgba(63,185,80,.55); }
+
+    @keyframes reaffirm-pulse {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.22); }
+      70%  { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+    .light.reaffirm { animation: reaffirm-pulse .45s ease; }
+
+    /* Undo button — appears after a comfort rating is made */
+    #undo-comfort {
+      height: 28px; padding: 0 10px; border-radius: 14px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); font-size: 12px; letter-spacing: .5px;
+      cursor: pointer; white-space: nowrap;
+      transition: border-color .15s, color .15s;
+    }
+    #undo-comfort:hover { border-color: var(--accent); color: var(--accent); }
+    #undo-comfort[hidden] { display: none; }
+
+    /* EF delta line — fades in on rating, fades out after 2.5 s */
+    #ef-delta {
+      font-size: 11px; color: var(--muted); letter-spacing: .8px;
+      opacity: 0; transition: opacity .3s; height: 14px;
+      padding-left: 2px;
+    }
+    #ef-delta.show { opacity: 1; }
+
+    /* Stats */
+    .stats { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .stat  { font-size: 14px; color: var(--muted); }
+    .stat b { color: var(--text); font-weight: 600; }
+
+    /* ═══════════════════════════════════════
+       PROGRESS GRID
+    ═══════════════════════════════════════ */
+    .progress {
+      flex: 1; overflow: hidden;
+      padding: 8px 32px 4px;
+      display: flex; flex-direction: column;
+    }
+
+    .prog-hdr {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 6px; flex-shrink: 0;
+    }
+
+    /* Universe selector tabs (Scales / Modes / …) */
+    .universe-tabs { display: flex; gap: 2px; }
+    .univ-btn {
+      padding: 4px 14px;
+      background: var(--surf2); border: 1px solid var(--border); border-radius: 5px;
+      color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .5px;
+      cursor: pointer; transition: all .15s; font-family: inherit;
+    }
+    .univ-btn:hover:not([disabled]) { border-color: var(--accent); color: var(--text); }
+    .univ-btn.active { background: var(--accent); border-color: var(--accent); color: #0d1117; }
+    .univ-btn[disabled] { opacity: .35; cursor: not-allowed; }
+
+    .legend     { display: flex; gap: 12px; margin-left: auto; }
+    .leg-item   { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+    .leg-dot    { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+    .grid-wrap { flex-shrink: 0; overflow: auto; }
+
+    .progress-body {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: row; gap: 16px;
+    }
+
+    /* ── Tabbed panel (right of grid) ── */
+    .tab-panel {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
+      background: var(--surf); border: 1px solid var(--border); border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tab-bar {
+      display: flex; flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--surf2);
+    }
+
+    .tab-btn {
+      padding: 7px 20px;
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      color: var(--muted); font-size: 13px; font-weight: 500;
+      letter-spacing: .5px; cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Each pane fills remaining panel height */
+    .tab-pane {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 12px;
+    }
+
+    .photo-placeholder {
+      font-size: 13px; color: var(--muted); text-align: center;
+      padding: 24px; line-height: 1.6; white-space: pre-line;
+    }
+
+    #photo-img {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain; border-radius: 6px;
+    }
+
+    /* Notes pane — override centering so content is top-aligned */
+    .tab-pane[data-tab="notes"] {
+      align-items: stretch; justify-content: flex-start; gap: 8px;
+    }
+
+    .notes-header {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1.5px; flex-shrink: 0;
+    }
+
+    #notes-area {
+      flex: 1; min-height: 0;
+      width: 100%; resize: none;
+      background: var(--surf2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px 12px; font-size: 14px; line-height: 1.6;
+      font-family: inherit; outline: none;
+      transition: border-color .15s;
+    }
+    #notes-area:focus { border-color: var(--accent); }
+
+    .notes-status {
+      flex-shrink: 0; height: 16px;
+      font-size: 11px; color: var(--muted); text-align: right;
+      transition: opacity .4s;
+    }
+
+    /* Info pane — top-aligned, scrollable */
+    .tab-pane[data-tab="info"] {
+      align-items: stretch; justify-content: flex-start;
+      overflow-y: auto; gap: 0; padding: 14px 12px;
+    }
+
+    /* Hall of Reps pane — canvas fills entire pane, no padding */
+    .tab-pane[data-tab="hall"] { padding: 0; }
+    #history-canvas { display: block; width: 100%; height: 100%; }
+
+    .info-slot {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1.5px;
+      margin-bottom: 12px;
+    }
+
+    .info-card {
+      background: var(--surf2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+      margin-bottom: 14px;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+
+    .info-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 13px; line-height: 1.4;
+    }
+    .info-lbl { color: var(--muted); flex-shrink: 0; margin-right: 8px; }
+    .info-val { color: var(--text); font-weight: 500; text-align: right; }
+    .info-val.info-due { color: var(--c2); font-weight: 700; }
+
+    .info-muted {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    .info-explainer {
+      background: var(--surf2); border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+    }
+    .info-explainer summary {
+      cursor: pointer; padding: 9px 12px;
+      font-size: 12px; font-weight: 600; color: var(--accent);
+      letter-spacing: .3px; user-select: none; list-style: none;
+    }
+    .info-explainer summary::-webkit-details-marker { display: none; }
+    .info-explainer summary::before { content: '▶ '; font-size: 10px; }
+    .info-explainer[open] summary::before { content: '▼ '; }
+    .info-explainer-body {
+      padding: 0 14px 12px;
+      font-size: 13px; color: var(--muted); line-height: 1.65;
+    }
+    .info-explainer-body p  { margin: 8px 0 0; }
+    .info-explainer-body ul { margin: 6px 0 0; padding-left: 18px; }
+    .info-explainer-body li { margin: 4px 0; }
+    .info-explainer-body b  { font-weight: 600; }
+
+    .ef-scale { margin-top: 14px; }
+    .ef-scale-title {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1.2px;
+      margin-bottom: 6px;
+    }
+    /* "harder to retain" / "easier to retain" — above the bar, coloured */
+    .ef-desc {
+      display: flex; justify-content: space-between;
+      font-size: 11px; font-weight: 600; margin-bottom: 4px;
+    }
+    /* The bar is split: fixed-width "floor→default" section + fading "default→∞" tail */
+    .ef-bar-wrap {
+      position: relative; height: 7px; border-radius: 4px; overflow: visible;
+      display: flex;
+    }
+    .ef-bar-left {
+      /* 1.30 → 2.50 : red to amber */
+      width: 55%; height: 7px; border-radius: 4px 0 0 4px;
+      background: linear-gradient(to right, var(--c1), var(--c2));
+    }
+    .ef-bar-right {
+      /* 2.50 → open end : amber to green, fading out */
+      flex: 1; height: 7px; border-radius: 0 4px 4px 0;
+      background: linear-gradient(to right, var(--c2), var(--c3), rgba(56,139,84,0.15));
+    }
+    /* Tick mark — real element so JS can position it dynamically */
+    .ef-tick {
+      position: absolute; top: -3px;
+      width: 2px; height: 13px; border-radius: 1px;
+      background: var(--text); opacity: .8;
+      pointer-events: none;
+      transition: left .25s ease;
+    }
+    .ef-labels {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--muted); margin-top: 4px;
+    }
+    .ef-lbl-floor { color: var(--c1); font-weight: 600; }
+    .ef-lbl-open  { color: var(--c3); font-weight: 600; text-align: right; }
+
+    /* ── Lightbox ── */
+    #lightbox {
+      display: none;
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(0,0,0,.92);
+      align-items: center; justify-content: center;
+      cursor: zoom-out;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img {
+      max-width: 96vw; max-height: 96vh;
+      object-fit: contain; border-radius: 6px;
+      box-shadow: 0 8px 48px rgba(0,0,0,.8);
+    }
+    #lightbox-close {
+      position: absolute; top: 16px; right: 20px;
+      font-size: 28px; line-height: 1; color: rgba(255,255,255,.6);
+      cursor: pointer; background: none; border: none;
+      transition: color .15s;
+    }
+    #lightbox-close:hover { color: #fff; }
+
+    table { border-collapse: collapse; }
+
+    thead th {
+      font-size: 11px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .5px; padding: 2px 4px 10px; text-align: center;
+      white-space: nowrap; font-weight: 400;
+    }
+    .key-lbl {
+      font-size: 15px; font-weight: 700; color: var(--muted);
+      padding: 3px 12px 3px 0; text-align: right; white-space: nowrap;
+    }
+    td { padding: 3px 3px; }
+
+    /* ── Grid cell: row of 4 rhythm strips ── */
+    .gcell {
+      display: flex;
+      width: 112px; height: 34px;
+      border-radius: 5px;
+      overflow: hidden;          /* clips strip corners to match cell radius */
+      transition: box-shadow .12s;
+      cursor: default;
+    }
+    /* Blue outline around the currently-selected key+variation */
+    .gcell.sel {
+      box-shadow: 0 0 0 2px var(--accent), 0 0 10px var(--aglow);
+    }
+
+    /* One strip per rhythm inside each cell */
+    .strip {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      transition: filter .1s;
+    }
+    .strip:hover { filter: brightness(1.3); }
+
+    /* Thin separator between adjacent strips */
+    .strip + .strip { border-left: 1px solid rgba(0,0,0,0.22); }
+    /* Subtle dark blue overlay on the selected rhythm strip (current cell only) */
+    .strip.r-active {
+      box-shadow: inset 0 0 0 100px rgba(40, 80, 180, 0.32);
+    }
+
+    /* Strip comfort colours */
+    .strip.g0 { background: var(--c0); }
+    .strip.g1 { background: var(--c1); }
+    .strip.g2 { background: var(--c2); }
+    .strip.g3 { background: var(--c3); }
+
+    /* Due-for-review — strip pulses from its comfort colour to near-black */
+    @keyframes strip-due-pulse {
+      0%, 100% { filter: brightness(1);   }
+      50%       { filter: brightness(0.2); }
+    }
+    .strip.due { animation: strip-due-pulse 2.5s ease-in-out infinite; transition: none; }
+    .gcell.sel { box-shadow: 0 0 0 2px var(--accent), 0 0 10px var(--aglow); }
+
+    /* Due badge in prog-hdr */
+    .due-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+      background: var(--c2d); color: var(--c2); border: 1px solid var(--c2);
+    }
+
+    /* Export / Import buttons */
+    .io-btn {
+      font-size: 11px; padding: 3px 10px;
+      border-radius: 5px; border: 1px solid var(--border);
+      background: var(--surf2); color: var(--muted);
+      cursor: pointer; transition: all .15s; white-space: nowrap;
+      font-family: inherit;
+    }
+    .io-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ═══════════════════════════════════════
+       SHORTCUTS BAR
+    ═══════════════════════════════════════ */
+    .shortcuts {
+      flex-shrink: 0;
+      padding: 7px 32px;
+      border-top: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; row-gap: 3px;
+    }
+    .sc  { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); padding-right: 16px; }
+    kbd  {
+      background: var(--surf2); border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 6px;
+      font-size: 11px; font-family: monospace; color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── STAGE ── -->
+<div class="stage">
+
+  <div class="key-row">
+    <div class="key-nav-v">
+      <button class="nav-btn-v" id="prevKey" title="Previous key (↑)">▲</button>
+      <button class="nav-btn-v" id="nextKey" title="Next key (↓)">▼</button>
+    </div>
+    <div class="key-center">
+      <div class="key-name" id="keyName">C</div>
+      <div class="key-sub" id="keySub">Major</div>
+    </div>
+  </div>
+
+  <div class="var-row">
+    <button class="var-btn" id="prevVar" title="Previous variation (←)">◀</button>
+    <div class="var-name"  id="varName">Regular 2 Octaves</div>
+    <button class="var-btn" id="nextVar" title="Next variation (→)">▶</button>
+    <div class="var-index" id="varIdx">1 / 8</div>
+  </div>
+
+</div>
+
+<!-- ── CONTROLS ── -->
+<div class="controls">
+
+  <div class="beat" id="beat"></div>
+
+  <div class="bpm-col">
+    <div class="bpm-num" id="bpmNum">80</div>
+    <div class="bpm-lbl">BPM</div>
+  </div>
+
+  <div class="pill-col">
+    <div class="pill stopped" id="playPill" onclick="toggleMetro()">■ STOPPED</div>
+    <div class="pill sounding" id="mutePill" onclick="toggleMute()">🔊 SOUND ON</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Rhythm control — moved from stage, sits left of comfort lights -->
+  <div class="rhythm-ctl" id="rhythmCtl" onclick="navigate('nr')" title="Cycle rhythm (Space)">
+    <div class="rhythm-ctl-sym"  id="rhythmCtlSym">♩</div>
+    <div class="rhythm-ctl-name" id="rhythmCtlName">Quarter Note</div>
+    <div class="rhythm-ctl-hint">SPACE</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="comfort-group">
+    <div class="comfort-lbl">Comfort</div>
+    <div class="comfort-lights-wrap">
+      <div class="lights">
+        <div class="light c1-off" id="l1" onclick="setComfort(1)" title="Hard — not comfortable yet  (press 1)">1</div>
+        <div class="light c2-off" id="l2" onclick="setComfort(2)" title="Getting there  (press 2)">2</div>
+        <div class="light c3-off" id="l3" onclick="setComfort(3)" title="Comfortable  (press 3)">3</div>
+        <button id="undo-comfort" onclick="undoComfort()" title="Undo last rating" hidden>&#8629; Undo</button>
+      </div>
+      <div id="ef-delta"></div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">Rated: <b id="sRated">0</b> / <span id="sTotalCells">384</span></div>
+    <div class="stat">Comfortable: <b id="sComfy">0</b></div>
+  </div>
+
+</div>
+
+<!-- ── PROGRESS ── -->
+<div class="progress">
+  <div class="prog-hdr">
+    <div class="universe-tabs">
+      <button class="univ-btn active" data-univ="scales">Scales</button>
+      <button class="univ-btn"        data-univ="modes">Modes</button>
+      <button class="univ-btn"        data-univ="pentatonic" disabled>Penta</button>
+      <button class="univ-btn"        data-univ="arpeggios"  disabled>Arpeg</button>
+    </div>
+    <span class="due-badge" id="due-badge" style="display:none">0 due</span>
+    <button class="io-btn" id="btn-export">Export</button>
+    <label  class="io-btn">Import<input type="file" id="import-input" accept=".json" style="display:none"></label>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--c0)"></div>Not started</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--c1)"></div>Not yet</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--c2)"></div>Getting there</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--c3)"></div>Comfortable</div>
+    </div>
+  </div>
+  <div class="progress-body">
+    <div class="grid-wrap">
+      <table id="grid"></table>
+    </div>
+    <div class="tab-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="photo">Photo</button>
+        <button class="tab-btn"        data-tab="info">Info</button>
+        <button class="tab-btn"        data-tab="notes">Notes</button>
+        <button class="tab-btn"        data-tab="hall">Hall of Reps</button>
+      </div>
+
+      <!-- Photo pane -->
+      <div class="tab-pane" data-tab="photo">
+        <span class="photo-placeholder" id="photo-placeholder">Click a cell to see the scale photo</span>
+        <img id="photo-img" alt="" style="display:none">
+      </div>
+
+      <!-- Info pane -->
+      <div class="tab-pane" data-tab="info" style="display:none">
+        <div id="info-content"></div>
+      </div>
+
+      <!-- Notes pane -->
+      <div class="tab-pane" data-tab="notes" style="display:none">
+        <div class="notes-header" id="notes-header">–</div>
+        <textarea id="notes-area" placeholder="Type your notes here…" spellcheck="false"></textarea>
+        <div class="notes-status" id="notes-status"></div>
+      </div>
+
+      <!-- Hall of Reps pane -->
+      <div class="tab-pane" data-tab="hall" style="display:none">
+        <canvas id="history-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── LIGHTBOX ── -->
+<div id="lightbox">
+  <button id="lightbox-close" title="Close (Esc)">✕</button>
+  <img id="lightbox-img" alt="">
+</div>
+
+<!-- ── SHORTCUTS ── -->
+<div class="shortcuts">
+  <span class="sc"><kbd>↑</kbd><kbd>↓</kbd>&nbsp;Key</span>
+  <span class="sc"><kbd>←</kbd><kbd>→</kbd>&nbsp;Variation</span>
+  <span class="sc"><kbd>Space</kbd>&nbsp;Rhythm</span>
+  <span class="sc"><kbd>Enter</kbd>&nbsp;Play / Stop</span>
+  <span class="sc"><kbd>M</kbd>&nbsp;Mute audio</span>
+  <span class="sc"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>&nbsp;Comfort (re-click to re-affirm)</span>
+  <span class="sc"><kbd>[</kbd><kbd>]</kbd>&nbsp;BPM ±5</span>
+  <span class="sc"><kbd>,</kbd><kbd>.</kbd>&nbsp;BPM ±1</span>
+</div>
+
+<script>
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const KEYS = ['C','F','Bb','Eb','Ab','Db','Gb','B','E','A','D','G'];
+
+const VARS = [
+  { name: 'Regular 2 Octaves',        abbr: '2 Oct',  slug: '2-octaves'   },
+  { name: 'Running the Fretboard',    abbr: 'Fret',   slug: 'fretboard'   },
+  { name: 'Four Note Sequence',       abbr: '4-Note', slug: '4-note-seq'  },
+  { name: 'Three Note Sequence',      abbr: '3-Note', slug: '3-note-seq'  },
+  { name: 'Sequential Seconds',       abbr: 'Seq 2',  slug: 'seq-seconds' },
+  { name: 'Lower Neighbour Sequence', abbr: 'L-Nbr',  slug: 'lower-nbr'  },
+  { name: 'Upper Neighbour Sequence', abbr: 'U-Nbr',  slug: 'upper-nbr'  },
+  { name: '1231 Sequence',            abbr: '1231',   slug: '1231'        },
+];
+
+// Filename slug for each key (lowercase, filesystem-safe)
+const KEY_SLUGS = {
+  'C':'c', 'F':'f', 'Bb':'bb', 'Eb':'eb', 'Ab':'ab', 'Db':'db',
+  'Gb':'gb', 'B':'b', 'E':'e', 'A':'a', 'D':'d', 'G':'g',
+};
+
+const RHYTHMS = [
+  { name: 'Quarter Note', sym: '♩' },
+  { name: 'Eighth Note',  sym: '♫' },
+  { name: 'Triplet',      sym: '3'  },
+  { name: '16th Note',    sym: '♬' },
+];
+
+const MODES = [
+  { name: 'Ionian',     abbr: 'Ion', degree: 0 },
+  { name: 'Dorian',     abbr: 'Dor', degree: 1 },
+  { name: 'Phrygian',   abbr: 'Phr', degree: 2 },
+  { name: 'Lydian',     abbr: 'Lyd', degree: 3 },
+  { name: 'Mixolydian', abbr: 'Mix', degree: 4 },
+  { name: 'Aeolian',    abbr: 'Aeo', degree: 5 },
+  { name: 'Locrian',    abbr: 'Loc', degree: 6 },
+];
+
+// Diatonic note names for each of the 12 major keys (circle-of-fifths order)
+const KEY_NOTES = {
+  'C':  ['C','D','E','F','G','A','B'],
+  'F':  ['F','G','A','Bb','C','D','E'],
+  'Bb': ['Bb','C','D','Eb','F','G','A'],
+  'Eb': ['Eb','F','G','Ab','Bb','C','D'],
+  'Ab': ['Ab','Bb','C','Db','Eb','F','G'],
+  'Db': ['Db','Eb','F','Gb','Ab','Bb','C'],
+  'Gb': ['Gb','Ab','Bb','Cb','Db','Eb','F'],
+  'B':  ['B','C#','D#','E','F#','G#','A#'],
+  'E':  ['E','F#','G#','A','B','C#','D#'],
+  'A':  ['A','B','C#','D','E','F#','G#'],
+  'D':  ['D','E','F#','G','A','B','C#'],
+  'G':  ['G','A','B','C','D','E','F#'],
+};
+
+const UNIVERSES = ['scales', 'modes', 'pentatonic', 'arpeggios'];
+
+// Returns note name for the given key + mode degree (e.g. k=0 "C", degree=1 → "D")
+function derivedRoot(k, degree) { return KEY_NOTES[KEYS[k]][degree]; }
+
+// Returns the active VARS-equivalent array for the current universe
+function universeVars() { return activeUniverse === 'modes' ? MODES : VARS; }
+
+const COMFORT_CLASS = ['g0', 'g1', 'g2', 'g3'];
+const STORAGE_KEY   = 'bass-trainer-v1';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let ki  = 0;   // current key index
+let vi  = 0;   // current variation/mode index
+let ri  = 0;   // current rhythm index
+let bpm = 80;
+let db  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → { comfort: 0–3, bpm }
+let sr  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → SM-2 record
+let activeUniverse = 'scales';  // 'scales' | 'modes'
+
+// Undo support — snapshot taken before each setComfort() call
+let undoState     = null;   // { ki, vi, ri, comfort, bpm, srSnap } or null
+let efDeltaTimer  = null;   // timeout handle for fading the EF delta line
+
+// Hall of Reps
+let historyLog    = [];     // { c: 1|2|3, xn: 0–1 } — one entry per RAG click
+let dropQueue     = [];     // comfort levels queued for drop animation
+let isDropping    = false;  // true while an animation frame is running
+
+// ─── Persistence ──────────────────────────────────────────────────────────────
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const p = JSON.parse(raw); db = p.db || {}; bpm = p.bpm || 80; sr = p.sr || {}; }
+  } catch (_) {}
+
+  // Migration A: cap any intervals already above 60 days and mark them due now
+  let migrated = false;
+  Object.values(sr).forEach(item => {
+    if (item.interval > 60) {
+      item.interval = 60;
+      item.dueDate  = Date.now();
+      migrated = true;
+    }
+  });
+
+  // Migration B: add 'scales|' prefix to legacy unprefixed db/sr keys
+  function needsPrefix(key) { return !UNIVERSES.includes(key.split('|')[0]); }
+  const anyLegacyDb = Object.keys(db).some(needsPrefix);
+  if (anyLegacyDb) {
+    const m = {};
+    Object.entries(db).forEach(([k, v]) => { m[needsPrefix(k) ? `scales|${k}` : k] = v; });
+    db = m;
+    migrated = true;
+  }
+  const anyLegacySr = Object.keys(sr).some(needsPrefix);
+  if (anyLegacySr) {
+    const m = {};
+    Object.entries(sr).forEach(([k, v]) => { m[needsPrefix(k) ? `scales|${k}` : k] = v; });
+    sr = m;
+    migrated = true;
+  }
+
+  if (migrated) save();
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ db, bpm, sr })); } catch (_) {}
+}
+
+// ─── Notes ────────────────────────────────────────────────────────────────────
+
+const NOTES_KEY = 'bass-trainer-notes-v1';
+let notes = {};
+
+function loadNotes() {
+  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || '{}'); } catch (_) {}
+  // Migration: add 'scales|' prefix to legacy unprefixed note keys
+  function needsPrefix(key) { return !UNIVERSES.includes(key.split('|')[0]); }
+  const anyLegacy = Object.keys(notes).some(needsPrefix);
+  if (anyLegacy) {
+    const m = {};
+    Object.entries(notes).forEach(([k, v]) => { m[needsPrefix(k) ? `scales|${k}` : k] = v; });
+    notes = m;
+    saveNotes();
+  }
+}
+
+function saveNotes() {
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch (_) {}
+}
+
+const HISTORY_KEY = 'bass-trainer-history-v1';
+function loadHistory() {
+  try { historyLog = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (_) { historyLog = []; }
+}
+function saveHistory() {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(historyLog)); } catch (_) {}
+}
+
+// ─── Hall of Reps ─────────────────────────────────────────────────────────────
+
+const HALL_COLORS = { 1: '#da3633', 2: '#e3b341', 3: '#3fb950' };
+
+// Size the canvas pixel buffer to match its CSS layout dimensions
+function sizeHallCanvas() {
+  const canvas = document.getElementById('history-canvas');
+  if (!canvas) return false;
+  const pane = canvas.parentElement;
+  const w = pane.clientWidth  || 400;
+  const h = pane.clientHeight || 300;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width  = w;
+    canvas.height = h;
+  }
+  return true;
+}
+
+// Compute ball radius so the tallest column always fits within the canvas height
+function hallRadius(W, H) {
+  if (historyLog.length === 0) return 8;
+  let R = 8;
+  const numCols = Math.max(1, Math.floor(W / (2 * R)));
+  const colH    = new Array(numCols).fill(0);
+  historyLog.forEach(b => { colH[Math.min(numCols - 1, Math.floor(b.xn * numCols))]++; });
+  const maxH    = Math.max(...colH);
+  if (maxH * 2 * R > H * 0.93) {
+    R = Math.max(2, Math.floor((H * 0.93) / (maxH * 2)));
+  }
+  return R;
+}
+
+function drawHistory() {
+  const canvas = document.getElementById('history-canvas');
+  if (!canvas) return;
+  if (!sizeHallCanvas()) return;
+  const ctx  = canvas.getContext('2d');
+  const W    = canvas.width;
+  const H    = canvas.height;
+  const R    = hallRadius(W, H);
+  const cols = Math.max(1, Math.floor(W / (2 * R)));
+  const colH = new Array(cols).fill(0);
+
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  if (historyLog.length === 0) {
+    ctx.fillStyle = 'rgba(139,148,158,0.35)';
+    ctx.font      = '13px -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Rate your first scale to begin building the Hall of Reps', W / 2, H / 2);
+    return;
+  }
+
+  historyLog.forEach(b => {
+    const col = Math.min(cols - 1, Math.floor(b.xn * cols));
+    const cx  = (col + 0.5) * (W / cols);
+    const cy  = H - colH[col] * 2 * R - R;
+    colH[col]++;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1, R - 0.5), 0, Math.PI * 2);
+    ctx.fillStyle = HALL_COLORS[b.c] || '#8b949e';
+    ctx.fill();
+  });
+
+  // Rep count label — bottom-right, subtle
+  const n = historyLog.length;
+  ctx.fillStyle = 'rgba(139,148,158,0.45)';
+  ctx.font      = '11px -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${n} rep${n !== 1 ? 's' : ''} logged`, W - 8, H - 6);
+}
+
+function addHistoryBall(comfort) {
+  dropQueue.push(comfort);
+  if (!isDropping) processDropQueue();
+}
+
+function processDropQueue() {
+  if (dropQueue.length === 0) { isDropping = false; return; }
+  isDropping     = true;
+  const comfort  = dropQueue.shift();
+  const canvas   = document.getElementById('history-canvas');
+
+  // Always record the ball — even if the tab isn't visible
+  const W    = canvas ? canvas.width  : 400;
+  const H    = canvas ? canvas.height : 300;
+  const R    = hallRadius(W, H);
+  const cols = Math.max(1, Math.floor(W / (2 * R)));
+
+  // Rebuild column heights from current log
+  const colH = new Array(cols).fill(0);
+  historyLog.forEach(b => { colH[Math.min(cols - 1, Math.floor(b.xn * cols))]++; });
+
+  // Pick from the 3 shortest columns for an organic pile
+  const sorted  = colH.map((h, i) => ({ h, i })).sort((a, b) => a.h - b.h);
+  const pick    = sorted[Math.floor(Math.random() * Math.min(3, sorted.length))].i;
+  const xn      = (pick + 0.5) / cols;
+  const restY   = H - colH[pick] * 2 * R - R;
+
+  historyLog.push({ c: comfort, xn });
+  saveHistory();
+
+  // Animate the drop only when the Hall tab is active
+  if (activeTab === 'hall' && canvas) {
+    const cx  = (pick + 0.5) * (W / cols);
+    let y     = -R;
+    let vy    = 0;
+    const ctx = canvas.getContext('2d');
+
+    function frame() {
+      vy += 0.675;
+      y  += vy;
+      if (y >= restY) {
+        drawHistory();
+        processDropQueue();
+        return;
+      }
+      // Redraw settled balls then paint the in-flight ball on top
+      drawHistory();
+      ctx.beginPath();
+      ctx.arc(cx, y, Math.max(1, R - 0.5), 0, Math.PI * 2);
+      ctx.fillStyle = HALL_COLORS[comfort] || '#8b949e';
+      ctx.fill();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  } else {
+    processDropQueue();
+  }
+}
+
+function notesSlot(k, v) { return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}`; }
+
+// ─── Spaced repetition (SM-2) ─────────────────────────────────────────────────
+// Each key+variation slot gets its own SR record tracking when to review.
+// Quality mapping: 1 (Hard)→2 fail, 2 (OK)→3 halve interval, 3 (Easy)→5 grow interval.
+
+function srKey(k, v, r) { return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`; }
+
+function sm2Update(k, v, r, quality) {
+  const key  = srKey(k, v, r);
+  if (!sr[key]) sr[key] = { interval: 1, repetitions: 0, easeFactor: 2.5, dueDate: 0 };
+  const item = sr[key];
+
+  if (quality >= 3) {
+    if (item.repetitions === 0) {
+      item.interval = 1;                                                        // first pass — always 1 day
+    } else if (quality === 3) {
+      item.interval = Math.max(1, Math.round(item.interval / 2));               // OK: halve → review sooner
+    } else if (item.repetitions === 1) {
+      item.interval = 6;                                                        // second Easy pass → 6 days
+    } else {
+      item.interval = Math.min(60, Math.round(item.interval * item.easeFactor)); // Easy: grow, cap 60 days
+    }
+    item.repetitions++;
+  } else {
+    // Hard — reset streak and interval
+    item.repetitions = 0;
+    item.interval    = 1;
+  }
+
+  // Adjust ease factor — easy ratings grow by 0.05 (halved) to slow interval expansion
+  item.easeFactor = Math.max(1.3,
+    item.easeFactor + 0.05 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  item.dueDate = startOfDay(Date.now() + item.interval * 86_400_000);
+}
+
+// Returns the Unix timestamp for midnight (local time) of the day containing ts
+function startOfDay(ts) {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function isDue(k, v, r) {
+  const item = sr[srKey(k, v, r)];
+  return !!item && item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now());
+}
+
+// ─── Universe switching ────────────────────────────────────────────────────────
+
+function switchUniverse(u) {
+  activeUniverse = u;
+  document.querySelectorAll('.univ-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.univ === u);
+  });
+  vi        = 0;         // reset variation/mode index
+  undoState = null;
+  hideEfDelta();
+  buildGrid();           // rebuild columns for the new universe
+  render();
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+let activeTab    = 'photo';
+let notesSaveTmr = null;
+
+ function switchTab(tab) {
+   activeTab = tab;
+   document.querySelectorAll('.tab-btn').forEach(btn => {
+     btn.classList.toggle('active', btn.dataset.tab === tab);
+   });
+   document.querySelectorAll('.tab-pane').forEach(pane => {
+     pane.style.display = pane.dataset.tab === tab ? 'flex' : 'none';
+   });
+   if (tab === 'hall') requestAnimationFrame(drawHistory);
+ }
+
+ function initTabs() {
+   document.querySelectorAll('.tab-btn').forEach(btn => {
+     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+   });
+
+   // Redraw Hall of Reps whenever the canvas pane is resized (e.g. window resize)
+   const hallPane = document.querySelector('.tab-pane[data-tab="hall"]');
+   if (hallPane && typeof ResizeObserver !== 'undefined') {
+     new ResizeObserver(() => { if (activeTab === 'hall') drawHistory(); }).observe(hallPane);
+   }
+
+   const area   = document.getElementById('notes-area');
+   const status = document.getElementById('notes-status');
+
+  area.addEventListener('input', () => {
+    notes[notesSlot(ki, vi)] = area.value;
+    status.textContent = 'Saving…';
+    status.style.opacity = '1';
+    if (notesSaveTmr) clearTimeout(notesSaveTmr);
+    notesSaveTmr = setTimeout(() => {
+      saveNotes();
+      status.textContent = 'Saved ✓';
+      // Fade the status message out after 2 s
+      setTimeout(() => { status.style.opacity = '0'; }, 2000);
+    }, 600);
+  });
+}
+
+// ─── DB helpers ───────────────────────────────────────────────────────────────
+
+function dbKey(k, v, r) {
+  return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`;
+}
+
+function getEntry(k, v, r) {
+  const key = dbKey(k, v, r);
+  if (!db[key]) db[key] = { comfort: 0, bpm };
+  return db[key];
+}
+
+// ─── Metronome ────────────────────────────────────────────────────────────────
+
+let audioCtx   = null;
+let metroTimer = null;
+let nextBeat   = 0;
+let isPlaying  = false;
+let isMuted    = false;
+let flashTimer = null;
+
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function scheduleClick(t) {
+  if (isMuted) return;
+  const ctx = getCtx();
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.connect(g); g.connect(ctx.destination);
+  osc.type            = 'sine';
+  osc.frequency.value = 880;
+  g.gain.setValueAtTime(0.45, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  osc.start(t); osc.stop(t + 0.05);
+}
+
+function flashBeat() {
+  const el = document.getElementById('beat');
+  el.classList.add('on');
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('on'), 90);
+}
+
+function scheduler() {
+  if (!isPlaying) return;
+  const ctx = getCtx();
+  while (nextBeat < ctx.currentTime + 0.12) {
+    scheduleClick(nextBeat);
+    const delay = Math.max(0, (nextBeat - ctx.currentTime) * 1000);
+    setTimeout(flashBeat, delay);
+    nextBeat += 60 / bpm;
+  }
+  metroTimer = setTimeout(scheduler, 25);
+}
+
+function startMetro() {
+  const ctx = getCtx();
+  if (ctx.state === 'suspended') ctx.resume();
+  nextBeat  = ctx.currentTime + 0.05;
+  isPlaying = true;
+  scheduler();
+  updateMetroUI();
+}
+
+function stopMetro() {
+  if (metroTimer) { clearTimeout(metroTimer); metroTimer = null; }
+  isPlaying = false;
+  document.getElementById('beat').classList.remove('on');
+  updateMetroUI();
+}
+
+function toggleMetro() { isPlaying ? stopMetro() : startMetro(); }
+function toggleMute()  { isMuted = !isMuted; updateMetroUI(); }
+
+function updateMetroUI() {
+  const pp = document.getElementById('playPill');
+  const mp = document.getElementById('mutePill');
+  pp.textContent = isPlaying ? '▶ PLAYING' : '■ STOPPED';
+  pp.className   = 'pill ' + (isPlaying ? 'playing'  : 'stopped');
+  mp.textContent = isMuted  ? '🔇 MUTED'  : '🔊 SOUND ON';
+  mp.className   = 'pill ' + (isMuted   ? 'muted'    : 'sounding');
+}
+
+// ─── Scale photo ──────────────────────────────────────────────────────────────
+
+function showScaleImage(k, v) {
+  const img         = document.getElementById('photo-img');
+  const placeholder = document.getElementById('photo-placeholder');
+
+  // Modes have no photos yet — show a descriptive placeholder
+  if (activeUniverse === 'modes') {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+    placeholder.textContent = `${derivedRoot(k, v)} ${MODES[v].name}\n(of ${KEYS[k]} major)`;
+    return;
+  }
+
+  const stem = `${KEY_SLUGS[KEYS[k]]}-major-${VARS[v].slug}`;
+
+  // Try pngs/ first; if that 404s, fall back to jpgs/; if that also fails, show message.
+  img.style.display = 'none';
+  placeholder.style.display = 'block';
+  placeholder.textContent = '';   // clear while loading
+
+  img.onerror = () => {
+    if (!img.src.endsWith('.jpg')) {
+      img.src = `jpgs/${stem}.jpg`;   // fall back to JPEG
+    } else {
+      img.style.display = 'none';
+      placeholder.textContent = `No photo yet for:\n${KEYS[k]} ${VARS[v].name}`;
+    }
+  };
+  img.onload = () => {
+    placeholder.style.display = 'none';
+    img.style.display = 'block';
+  };
+  img.alt = `${KEYS[k]} ${VARS[v].name}`;
+  img.src = `pngs/${stem}.png`;
+}
+
+
+
+function navigate(action) {
+  const uvars = universeVars();
+  switch (action) {
+    case 'pk': ki = (ki - 1 + KEYS.length)  % KEYS.length;   break;
+    case 'nk': ki = (ki + 1)                % KEYS.length;   break;
+    case 'pv': vi = (vi - 1 + uvars.length) % uvars.length;  break;
+    case 'nv': vi = (vi + 1)                % uvars.length;  break;
+    case 'nr': ri = (ri + 1)                % RHYTHMS.length; break;
+  }
+  // Navigating away clears the undo snapshot and EF delta
+  undoState = null;
+  hideEfDelta();
+  // Restore stored BPM if this slot has been rated before
+  const ent = getEntry(ki, vi, ri);
+  if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+  if (isPlaying) { stopMetro(); startMetro(); }
+  render();
+}
+
+function setComfort(level) {
+  const ent    = getEntry(ki, vi, ri);
+  const srK    = srKey(ki, vi, ri);
+  const oldEf  = sr[srK] ? sr[srK].easeFactor : 2.50;
+
+  // Snapshot state BEFORE applying the new rating so Undo can restore it exactly
+  undoState = {
+    ki, vi, ri,
+    comfort: ent.comfort,
+    bpm:     ent.bpm,
+    srSnap:  sr[srK] ? { ...sr[srK] } : null,
+    histLogLen: historyLog.length,
+  };
+
+  const reaffirm = ent.comfort === level;
+  ent.comfort = level;
+  ent.bpm = bpm;
+  const quality = [0, 2, 3, 5][level]; // 1→fail(2), 2→pass(3), 3→perfect(5)
+  sm2Update(ki, vi, ri, quality);
+  save();
+  renderComfort();
+  renderGrid();
+  renderStats();
+  renderInfo();
+
+  // Pulse the button so re-affirmation is visually distinct from a no-op
+  if (reaffirm) {
+    const btn = document.getElementById('l' + level);
+    btn.classList.remove('reaffirm');
+    void btn.offsetWidth; // force reflow so animation always re-fires
+    btn.classList.add('reaffirm');
+    btn.addEventListener('animationend', () => btn.classList.remove('reaffirm'), { once: true });
+  }
+
+  // Show the EF delta line
+  const newEf = sr[srK] ? sr[srK].easeFactor : 2.50;
+  showEfDelta(oldEf, newEf);
+
+  addHistoryBall(level);
+}
+
+function undoComfort() {
+  if (!undoState) return;
+  const { ki: k, vi: v, ri: r, comfort, bpm: b, srSnap, histLogLen } = undoState;
+  const key = dbKey(k, v, r);
+  if (!db[key]) db[key] = { comfort: 0, bpm: b };
+  db[key].comfort = comfort;
+  db[key].bpm     = b;
+  const sk = srKey(k, v, r);
+  if (srSnap) sr[sk] = srSnap; else delete sr[sk];
+  undoState = null;
+  hideEfDelta();
+  save();
+  // Remove the history ball added by this rating
+  if (histLogLen !== undefined) {
+    historyLog.splice(histLogLen);
+    dropQueue.length = 0;
+    saveHistory();
+    if (activeTab === 'hall') drawHistory();
+  }
+  renderComfort();
+  renderGrid();
+  renderStats();
+  renderInfo();
+}
+
+function renderUndo() {
+  // Show the Undo button only when there is a snapshot for the currently-viewed slot
+  const hasUndo = undoState && undoState.ki === ki && undoState.vi === vi && undoState.ri === ri;
+  document.getElementById('undo-comfort').hidden = !hasUndo;
+}
+
+function showEfDelta(oldEf, newEf) {
+  const el  = document.getElementById('ef-delta');
+  const dir = newEf > oldEf + 0.001 ? '↑' : newEf < oldEf - 0.001 ? '↓' : '→';
+  el.textContent = `EF ${oldEf.toFixed(2)} ${dir} ${newEf.toFixed(2)}`;
+  el.classList.add('show');
+  clearTimeout(efDeltaTimer);
+  efDeltaTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function hideEfDelta() {
+  clearTimeout(efDeltaTimer);
+  document.getElementById('ef-delta').classList.remove('show');
+}
+
+function adjustBpm(delta) {
+  bpm = Math.max(40, Math.min(300, bpm + delta));
+  getEntry(ki, vi, ri).bpm = bpm;
+  save();
+  document.getElementById('bpmNum').textContent = bpm;
+  if (isPlaying) { stopMetro(); startMetro(); }
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+function render() {
+  const uvars = universeVars();
+  if (activeUniverse === 'modes') {
+    const root = derivedRoot(ki, vi);
+    document.getElementById('keyName').textContent  = root;
+    document.getElementById('keySub').textContent   = MODES[vi].name;
+    document.getElementById('varName').textContent  = `of ${KEYS[ki]} major`;
+  } else {
+    document.getElementById('keyName').textContent  = KEYS[ki];
+    document.getElementById('keySub').textContent   = 'Major';
+    document.getElementById('varName').textContent  = uvars[vi].name;
+  }
+  document.getElementById('rhythmCtlSym').textContent  = RHYTHMS[ri].sym;
+  document.getElementById('rhythmCtlName').textContent = RHYTHMS[ri].name;
+  document.getElementById('varIdx').textContent        = `${vi + 1} / ${uvars.length}`;
+  document.getElementById('bpmNum').textContent        = bpm;
+  renderComfort();
+  renderGrid();
+  renderStats();
+  renderInfo();
+  // Update notes pane content for the new selection
+  const notesLabel = activeUniverse === 'modes'
+    ? `${derivedRoot(ki, vi)} ${MODES[vi].name} (of ${KEYS[ki]})`
+    : `${KEYS[ki]} – ${uvars[vi].name}`;
+  document.getElementById('notes-header').textContent = notesLabel;
+  document.getElementById('notes-area').value = notes[notesSlot(ki, vi)] || '';
+  document.getElementById('notes-status').textContent = '';
+  document.getElementById('notes-status').style.opacity = '0';
+  showScaleImage(ki, vi);
+}
+
+function renderComfort() {
+  const c = getEntry(ki, vi, ri).comfort;
+  document.getElementById('l1').className   = `light ${c === 1 ? 'c1-on' : 'c1-off'}`;
+  document.getElementById('l2').className   = `light ${c === 2 ? 'c2-on' : 'c2-off'}`;
+  document.getElementById('l3').className   = `light ${c === 3 ? 'c3-on' : 'c3-off'}`;
+  document.getElementById('l1').textContent = '1';
+  document.getElementById('l2').textContent = '2';
+  document.getElementById('l3').textContent = '3';
+  renderUndo();
+}
+
+function renderStats() {
+  const prefix = activeUniverse + '|';
+  const uvars  = universeVars();
+  let rated = 0, comfy = 0, dueCount = 0;
+  Object.entries(db).forEach(([k, ent]) => {
+    if (!k.startsWith(prefix)) return;
+    if (ent.comfort > 0) rated++;
+    if (ent.comfort === 3) comfy++;
+  });
+  KEYS.forEach((_, k) => uvars.forEach((_, v) => RHYTHMS.forEach((_, r) => {
+    if (isDue(k, v, r)) dueCount++;
+  })));
+  const total = KEYS.length * uvars.length * RHYTHMS.length;
+  document.getElementById('sRated').textContent      = rated;
+  document.getElementById('sTotalCells').textContent = total;
+  document.getElementById('sComfy').textContent      = comfy;
+  const badge = document.getElementById('due-badge');
+  badge.textContent  = `${dueCount} due`;
+  badge.style.display = dueCount > 0 ? '' : 'none';
+}
+
+function renderInfo() {
+  const el   = document.getElementById('info-content');
+  if (!el) return;
+  const item = sr[srKey(ki, vi, ri)];
+  const slot = activeUniverse === 'modes'
+    ? `${derivedRoot(ki, vi)} ${MODES[vi].name} · ${RHYTHMS[ri].name}`
+    : `${KEYS[ki]} · ${universeVars()[vi].name} · ${RHYTHMS[ri].name}`;
+
+  let srHtml;
+  if (!item) {
+    srHtml = `<p class="info-muted">No review data yet for this slot.<br>
+Rate it with <b>1</b>, <b>2</b>, or <b>3</b> to start tracking.</p>`;
+  } else {
+    const now       = Date.now();
+    const isOverdue = startOfDay(item.dueDate) <= startOfDay(now);
+    const dueDate   = new Date(item.dueDate);
+    const dateStr   = dueDate.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
+    // Approximate last-reviewed date from dueDate − interval
+    const lastDate  = new Date(item.dueDate - item.interval * 86_400_000);
+    const lastStr   = lastDate.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
+
+    srHtml = `
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-lbl">Repetitions</span>
+          <span class="info-val">${item.repetitions}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Current interval</span>
+          <span class="info-val">${item.interval} day${item.interval !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Last reviewed</span>
+          <span class="info-val">${lastStr}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Next review</span>
+          <span class="info-val${isOverdue ? ' info-due' : ''}">${isOverdue ? 'Due today!' : dateStr}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Ease factor</span>
+          <span class="info-val">${item.easeFactor.toFixed(2)}</span>
+        </div>
+      </div>`;
+  }
+
+  // Ease factor bar — always shown; sits between the data card and the explainer
+  // Map ease factor value to a % position along the bar.
+  // Left 55% = 1.30→2.50 (exact scale); right 45% = 2.50→4.00 (soft cap).
+  const ef     = item ? item.easeFactor : 2.50;
+  const efPct  = ef <= 2.50
+    ? (55 * (ef - 1.30) / 1.20)
+    : (55 + 40 * Math.min(1, (ef - 2.50) / 1.50));
+  const efLeft = efPct.toFixed(1) + '%';
+
+  const efBar = `
+    <div class="ef-scale">
+      <div class="ef-scale-title">Ease factor</div>
+      <div class="ef-desc">
+        <span style="color:var(--c1)">harder to retain</span>
+        <span style="color:var(--c3)">easier to retain</span>
+      </div>
+      <div class="ef-bar-wrap">
+        <div class="ef-bar-left"></div>
+        <div class="ef-bar-right"></div>
+        <div class="ef-tick" style="left:${efLeft}"></div>
+      </div>
+      <div class="ef-labels">
+        <span class="ef-lbl-floor">1.30</span>
+        <span class="ef-lbl-open">→ open-ended</span>
+      </div>
+      <p style="margin:6px 0 0; font-size:12px; color:var(--muted)">All slots start at 2.50. Rating Hard pushes it left (floor 1.30); rating Easy pushes it right (no limit).</p>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="info-slot">${slot}</div>
+    ${srHtml}
+    ${efBar}
+    <details class="info-explainer">
+      <summary>How spaced repetition works</summary>
+      <div class="info-explainer-body">
+        <p>SM-2 schedules each slot for review at growing intervals based on your ratings.</p>
+        <p>When you rate a slot:</p>
+        <ul>
+          <li><b style="color:var(--c1)">Hard (1)</b> — interval resets to 1 day; ease factor drops</li>
+          <li><b style="color:var(--c2)">OK (2)</b>   — interval is halved; ease factor drops slightly</li>
+          <li><b style="color:var(--c3)">Easy (3)</b> — interval grows; ease factor rises</li>
+        </ul>
+        <p>Interval schedule: 1 day → 6 days → previous × ease factor (rounded), capped at 60 days.</p>
+        <p>When a slot is due for review today, its rhythm strips <b>pulse</b> in the progress grid.</p>
+      </div>
+    </details>`;
+}
+
+// ─── Grid (built once, updated on every render) ───────────────────────────────
+
+function buildGrid() {
+  const tbl   = document.getElementById('grid');
+  const uvars = universeVars();
+
+  // Header row
+  let h = '<thead><tr><th></th>';
+  uvars.forEach(v => { h += `<th title="${v.name}">${v.abbr}</th>`; });
+  h += '</tr></thead><tbody>';
+
+  // Data rows: one per key
+  KEYS.forEach((key, k) => {
+    h += `<tr><td class="key-lbl">${key}</td>`;
+    uvars.forEach((_, v) => {
+      // Each cell = 4 strips, one per rhythm
+      h += `<td><div class="gcell" data-k="${k}" data-v="${v}">`;
+      RHYTHMS.forEach((rh, r) => {
+        h += `<div class="strip g0" data-k="${k}" data-v="${v}" data-r="${r}">${rh.sym}</div>`;
+      });
+      h += `</div></td>`;
+    });
+    h += '</tr>';
+  });
+  h += '</tbody>';
+  tbl.innerHTML = h;
+
+  // Strip click → jump to that exact key + variation + rhythm
+  tbl.querySelectorAll('.strip').forEach(strip => {
+    strip.addEventListener('click', ev => {
+      ev.stopPropagation();   // don't also fire the gcell handler
+      ki = +strip.dataset.k;
+      vi = +strip.dataset.v;
+      ri = +strip.dataset.r;
+      undoState = null;
+      hideEfDelta();
+      const ent = getEntry(ki, vi, ri);
+      if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+      if (isPlaying) { stopMetro(); startMetro(); }
+      render();
+    });
+  });
+
+  // gcell click (gap between strips, if any) → jump to key + variation, keep rhythm
+  tbl.querySelectorAll('.gcell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      ki = +cell.dataset.k;
+      vi = +cell.dataset.v;
+      undoState = null;
+      hideEfDelta();
+      const ent = getEntry(ki, vi, ri);
+      if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+      if (isPlaying) { stopMetro(); startMetro(); }
+      render();
+    });
+  });
+}
+
+function renderGrid() {
+  // Each strip is coloured independently by its own comfort level
+  document.querySelectorAll('.strip').forEach(strip => {
+    const k       = +strip.dataset.k;
+    const v       = +strip.dataset.v;
+    const r       = +strip.dataset.r;
+    const comfort = (db[dbKey(k, v, r)] || {}).comfort || 0;
+    const activeR = (k === ki && v === vi && r === ri);
+    const due     = isDue(k, v, r);
+    strip.className   = `strip ${COMFORT_CLASS[comfort]}${activeR ? ' r-active' : ''}${due ? ' due' : ''}`;
+    if (!due) strip.style.filter = '';  // clear any brightness value left by the pulse animation
+    strip.textContent = RHYTHMS[r].sym;
+  });
+
+  // gcell: blue ring if selected; due strips pulse via CSS animation
+  document.querySelectorAll('.gcell').forEach(cell => {
+    const k   = +cell.dataset.k;
+    const v   = +cell.dataset.v;
+    const sel = k === ki && v === vi;
+    const due = RHYTHMS.some((_, r) => isDue(k, v, r));
+    cell.className = `gcell${sel ? ' sel' : ''}${due ? ' due' : ''}`;
+  });
+}
+
+// ─── Keyboard ─────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (document.activeElement === document.getElementById('notes-area')) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  switch (e.code) {
+    case 'ArrowUp':      e.preventDefault(); navigate('pk'); break;
+    case 'ArrowDown':    e.preventDefault(); navigate('nk'); break;
+    case 'ArrowLeft':    e.preventDefault(); navigate('pv'); break;
+    case 'ArrowRight':   e.preventDefault(); navigate('nv'); break;
+    case 'Space':        e.preventDefault(); navigate('nr'); break;
+    case 'Enter':        e.preventDefault(); toggleMetro();  break;
+    case 'KeyM':         toggleMute();                        break;
+    case 'Digit1':       setComfort(1);                       break;
+    case 'Digit2':       setComfort(2);                       break;
+    case 'Digit3':       setComfort(3);                       break;
+    case 'BracketLeft':  adjustBpm(-5);                       break;
+    case 'BracketRight': adjustBpm(5);                        break;
+    case 'Comma':        adjustBpm(-1);                       break;
+    case 'Period':       adjustBpm(1);                        break;
+  }
+});
+
+// ─── Export / Import ──────────────────────────────────────────────────────────
+
+function exportData() {
+  const payload = { db, bpm, sr, notes, historyLog, exportedAt: new Date().toISOString() };
+  const blob    = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href        = url;
+  a.download    = `bass-trainer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (typeof data.db !== 'object') throw new Error('Missing db — is this a valid backup file?');
+      db    = data.db    || {};
+      bpm   = data.bpm   || 80;
+      sr    = data.sr    || {};
+      notes = data.notes || {};
+      historyLog = Array.isArray(data.historyLog) ? data.historyLog : [];
+      save();
+      saveNotes();
+      saveHistory();
+      render();
+      if (activeTab === 'hall') drawHistory();
+      alert('Import successful.');
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─── Button wiring ────────────────────────────────────────────────────────────
+
+document.getElementById('prevKey').addEventListener('click', () => navigate('pk'));
+document.getElementById('nextKey').addEventListener('click', () => navigate('nk'));
+document.getElementById('prevVar').addEventListener('click', () => navigate('pv'));
+document.getElementById('nextVar').addEventListener('click', () => navigate('nv'));
+document.getElementById('rhythmCtl').addEventListener('click', () => navigate('nr'));
+
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+(function () {
+  const overlay   = document.getElementById('lightbox');
+  const lbImg     = document.getElementById('lightbox-img');
+  const closeBtn  = document.getElementById('lightbox-close');
+  const photoImg  = document.getElementById('photo-img');
+
+  function open() {
+    lbImg.src = photoImg.src;
+    lbImg.alt = photoImg.alt;
+    overlay.classList.add('open');
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+  }
+
+  // Click the photo to open
+  photoImg.style.cursor = 'zoom-in';
+  photoImg.addEventListener('click', open);
+
+  // Click backdrop or ✕ button to close
+  overlay.addEventListener('click', close);
+  closeBtn.addEventListener('click', e => { e.stopPropagation(); close(); });
+
+  // Escape key to close
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+
+
+
+load();
+loadNotes();
+loadHistory();
+buildGrid();
+initTabs();
+switchTab('photo');   // initial tab — stays sticky after this
+render();
+updateMetroUI();
+
+document.getElementById('btn-export').addEventListener('click', exportData);
+document.getElementById('import-input').addEventListener('change', e => {
+  if (e.target.files[0]) importData(e.target.files[0]);
+  e.target.value = ''; // reset so same file can be re-imported
+});
+
+document.querySelectorAll('.univ-btn:not([disabled])').forEach(btn => {
+  btn.addEventListener('click', () => switchUniverse(btn.dataset.univ));
+});
+</script>
+</body>
+</html>
