@@ -583,7 +583,8 @@
 <div class="progress">
   <div class="prog-hdr">
     <div class="universe-tabs">
-      <button class="univ-btn active" data-univ="scales">Scales</button>
+      <button class="univ-btn active" data-univ="scales">Major</button>
+      <button class="univ-btn"        data-univ="minor">Minor</button>
       <button class="univ-btn"        data-univ="modes">Modes</button>
       <button class="univ-btn"        data-univ="pentatonic" disabled>Penta</button>
       <button class="univ-btn"        data-univ="arpeggios"  disabled>Arpeg</button>
@@ -709,7 +710,7 @@ const KEY_NOTES = {
   'G':  ['G','A','B','C','D','E','F#'],
 };
 
-const UNIVERSES = ['scales', 'modes', 'pentatonic', 'arpeggios'];
+const UNIVERSES = ['scales', 'minor', 'modes', 'pentatonic', 'arpeggios'];
 
 // Returns note name for the given key + mode degree (e.g. k=0 "C", degree=1 → "D")
 function derivedRoot(k, degree) { return KEY_NOTES[KEYS[k]][degree]; }
@@ -1157,7 +1158,7 @@ function showScaleImage(k, v) {
 
   img.onerror = () => {
     if (!img.src.endsWith('.jpg')) {
-      img.src = `jpgs/${stem}.jpg`;   // fall back to JPEG
+      img.src = `major-scales/jpgs/${stem}.jpg`;   // fall back to JPEG
     } else {
       img.style.display = 'none';
       placeholder.textContent = `No photo yet for:\n${KEYS[k]} ${VARS[v].name}`;
@@ -1168,7 +1169,7 @@ function showScaleImage(k, v) {
     img.style.display = 'block';
   };
   img.alt = `${KEYS[k]} ${VARS[v].name}`;
-  img.src = `pngs/${stem}.png`;
+  img.src = `major-scales/pngs/${stem}.png`;
 }
 
 
@@ -1187,7 +1188,7 @@ function navigate(action) {
   hideEfDelta();
   // Restore stored BPM if this slot has been rated before
   const ent = getEntry(ki, vi, ri);
-  if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+  if (ent.bpm) bpm = ent.bpm;
   if (isPlaying) { stopMetro(); startMetro(); }
   render();
 }
@@ -1297,7 +1298,8 @@ function render() {
     document.getElementById('varName').textContent  = `of ${KEYS[ki]} major`;
   } else {
     document.getElementById('keyName').textContent  = KEYS[ki];
-    document.getElementById('keySub').textContent   = 'Major';
+    document.getElementById('keySub').textContent   =
+      activeUniverse === 'minor' ? 'Natural Minor' : 'Major';
     document.getElementById('varName').textContent  = uvars[vi].name;
   }
   document.getElementById('rhythmCtlSym').textContent  = RHYTHMS[ri].sym;
@@ -1482,7 +1484,7 @@ function buildGrid() {
       undoState = null;
       hideEfDelta();
       const ent = getEntry(ki, vi, ri);
-      if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+      if (ent.bpm) bpm = ent.bpm;
       if (isPlaying) { stopMetro(); startMetro(); }
       render();
     });
@@ -1496,7 +1498,7 @@ function buildGrid() {
       undoState = null;
       hideEfDelta();
       const ent = getEntry(ki, vi, ri);
-      if (ent.comfort > 0 && ent.bpm) bpm = ent.bpm;
+      if (ent.bpm) bpm = ent.bpm;
       if (isPlaying) { stopMetro(); startMetro(); }
       render();
     });

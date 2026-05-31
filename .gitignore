@@ -1,4 +1,4 @@
-jpgs/*
-!jpgs/.gitkeep
-pngs/*
-!pngs/.gitkeep
+major-scales/jpgs/*
+!major-scales/jpgs/.gitkeep
+major-scales/pngs/*
+!major-scales/pngs/.gitkeep
