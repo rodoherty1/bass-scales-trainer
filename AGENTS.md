@@ -9,3 +9,6 @@ Currently only `major-scales/` images exist. Natural Minor images are forthcomin
 # Git
 Commits may take place on the `main` branch.
 Commits must always preserve the current git history.  Never use `git push -f`.
+Ensure README.md is kept up to date.
+
+
