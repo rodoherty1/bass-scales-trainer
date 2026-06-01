@@ -685,7 +685,6 @@ const RHYTHMS = [
 ];
 
 const MODES = [
-  { name: 'Ionian',     abbr: 'Ion', degree: 0 },
   { name: 'Dorian',     abbr: 'Dor', degree: 1 },
   { name: 'Phrygian',   abbr: 'Phr', degree: 2 },
   { name: 'Lydian',     abbr: 'Lyd', degree: 3 },
@@ -1156,7 +1155,7 @@ function showScaleImage(k, v) {
   if (activeUniverse === 'modes') {
     img.style.display = 'none';
     placeholder.style.display = 'block';
-    placeholder.textContent = `${derivedRoot(k, v)} ${MODES[v].name}\n(of ${KEYS[k]} major)`;
+    placeholder.textContent = `${derivedRoot(k, MODES[v].degree)} ${MODES[v].name}\n(of ${KEYS[k]} major)`;
     return;
   }
 
@@ -1307,7 +1306,7 @@ function adjustBpm(delta) {
 function render() {
   const uvars = universeVars();
   if (activeUniverse === 'modes') {
-    const root = derivedRoot(ki, vi);
+    const root = derivedRoot(ki, MODES[vi].degree);
     document.getElementById('keyName').textContent  = root;
     document.getElementById('keySub').textContent   = MODES[vi].name;
     document.getElementById('varName').textContent  = `of ${KEYS[ki]} major`;
@@ -1373,7 +1372,7 @@ function renderInfo() {
   if (!el) return;
   const item = sr[srKey(ki, vi, ri)];
   const slot = activeUniverse === 'modes'
-    ? `${derivedRoot(ki, vi)} ${MODES[vi].name} · ${RHYTHMS[ri].name}`
+    ? `${derivedRoot(ki, MODES[vi].degree)} ${MODES[vi].name} · ${RHYTHMS[ri].name}`
     : `${universeKeys()[ki]} · ${universeVars()[vi].name} · ${RHYTHMS[ri].name}`;
 
   let srHtml;
