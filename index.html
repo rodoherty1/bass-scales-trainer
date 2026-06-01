@@ -712,8 +712,19 @@ const KEY_NOTES = {
 
 const UNIVERSES = ['scales', 'minor', 'modes', 'pentatonic', 'arpeggios'];
 
+const MINOR_KEYS = ['A','E','D','B','G','F#','C','C#','F','G#','Bb','D#'];
+
+// Filename slug for each natural-minor key
+const MINOR_KEY_SLUGS = {
+  'A':'a', 'E':'e', 'D':'d', 'B':'b', 'G':'g', 'F#':'f-sharp',
+  'C':'c', 'C#':'c-sharp', 'F':'f', 'G#':'g-sharp', 'Bb':'bb', 'D#':'d-sharp',
+};
+
 // Returns note name for the given key + mode degree (e.g. k=0 "C", degree=1 → "D")
 function derivedRoot(k, degree) { return KEY_NOTES[KEYS[k]][degree]; }
+
+// Returns the active key array for the current universe
+function universeKeys() { return activeUniverse === 'minor' ? MINOR_KEYS : KEYS; }
 
 // Returns the active VARS-equivalent array for the current universe
 function universeVars() { return activeUniverse === 'modes' ? MODES : VARS; }
@@ -944,13 +955,13 @@ function processDropQueue() {
   }
 }
 
-function notesSlot(k, v) { return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}`; }
+function notesSlot(k, v) { return `${activeUniverse}|${universeKeys()[k]}|${universeVars()[v].name}`; }
 
 // ─── Spaced repetition (SM-2) ─────────────────────────────────────────────────
 // Each key+variation slot gets its own SR record tracking when to review.
 // Quality mapping: 1 (Hard)→2 fail, 2 (OK)→3 halve interval, 3 (Easy)→5 grow interval.
 
-function srKey(k, v, r) { return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`; }
+function srKey(k, v, r) { return `${activeUniverse}|${universeKeys()[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`; }
 
 function sm2Update(k, v, r, quality) {
   const key  = srKey(k, v, r);
@@ -1052,7 +1063,7 @@ let notesSaveTmr = null;
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
 function dbKey(k, v, r) {
-  return `${activeUniverse}|${KEYS[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`;
+  return `${activeUniverse}|${universeKeys()[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`;
 }
 
 function getEntry(k, v, r) {
@@ -1149,15 +1160,11 @@ function showScaleImage(k, v) {
     return;
   }
 
-  // Natural Minor has no photos yet — show a placeholder
-  if (activeUniverse === 'minor') {
-    img.style.display = 'none';
-    placeholder.style.display = 'block';
-    placeholder.textContent = `${KEYS[k]} Natural Minor\n${VARS[v].name}\n(no photo yet)`;
-    return;
-  }
-
-  const stem = `${KEY_SLUGS[KEYS[k]]}-major-${VARS[v].slug}`;
+  const ukeys  = universeKeys();
+  const stem   = activeUniverse === 'minor'
+    ? `${MINOR_KEY_SLUGS[ukeys[k]]}-natural-minor-${VARS[v].slug}`
+    : `${KEY_SLUGS[KEYS[k]]}-major-${VARS[v].slug}`;
+  const folder = activeUniverse === 'minor' ? 'natural-minor' : 'major-scales';
 
   // Try pngs/ first; if that 404s, fall back to jpgs/; if that also fails, show message.
   img.style.display = 'none';
@@ -1166,18 +1173,18 @@ function showScaleImage(k, v) {
 
   img.onerror = () => {
     if (!img.src.endsWith('.jpg')) {
-      img.src = `major-scales/jpgs/${stem}.jpg`;   // fall back to JPEG
+      img.src = `${folder}/jpgs/${stem}.jpg`;   // fall back to JPEG
     } else {
       img.style.display = 'none';
-      placeholder.textContent = `No photo yet for:\n${KEYS[k]} ${VARS[v].name}`;
+      placeholder.textContent = `No photo yet for:\n${ukeys[k]} ${VARS[v].name}`;
     }
   };
   img.onload = () => {
     placeholder.style.display = 'none';
     img.style.display = 'block';
   };
-  img.alt = `${KEYS[k]} ${VARS[v].name}`;
-  img.src = `major-scales/pngs/${stem}.png`;
+  img.alt = `${ukeys[k]} ${VARS[v].name}`;
+  img.src = `${folder}/pngs/${stem}.png`;
 }
 
 
@@ -1185,8 +1192,8 @@ function showScaleImage(k, v) {
 function navigate(action) {
   const uvars = universeVars();
   switch (action) {
-    case 'pk': ki = (ki - 1 + KEYS.length)  % KEYS.length;   break;
-    case 'nk': ki = (ki + 1)                % KEYS.length;   break;
+    case 'pk': ki = (ki - 1 + universeKeys().length)  % universeKeys().length;   break;
+    case 'nk': ki = (ki + 1)                          % universeKeys().length;   break;
     case 'pv': vi = (vi - 1 + uvars.length) % uvars.length;  break;
     case 'nv': vi = (vi + 1)                % uvars.length;  break;
     case 'nr': ri = (ri + 1)                % RHYTHMS.length; break;
@@ -1305,7 +1312,7 @@ function render() {
     document.getElementById('keySub').textContent   = MODES[vi].name;
     document.getElementById('varName').textContent  = `of ${KEYS[ki]} major`;
   } else {
-    document.getElementById('keyName').textContent  = KEYS[ki];
+    document.getElementById('keyName').textContent  = universeKeys()[ki];
     document.getElementById('keySub').textContent   =
       activeUniverse === 'minor' ? 'Natural Minor' : 'Major';
     document.getElementById('varName').textContent  = uvars[vi].name;
@@ -1321,7 +1328,7 @@ function render() {
   // Update notes pane content for the new selection
   const notesLabel = activeUniverse === 'modes'
     ? `${derivedRoot(ki, vi)} ${MODES[vi].name} (of ${KEYS[ki]})`
-    : `${KEYS[ki]} – ${uvars[vi].name}`;
+    : `${universeKeys()[ki]} – ${uvars[vi].name}`;
   document.getElementById('notes-header').textContent = notesLabel;
   document.getElementById('notes-area').value = notes[notesSlot(ki, vi)] || '';
   document.getElementById('notes-status').textContent = '';
@@ -1349,10 +1356,10 @@ function renderStats() {
     if (ent.comfort > 0) rated++;
     if (ent.comfort === 3) comfy++;
   });
-  KEYS.forEach((_, k) => uvars.forEach((_, v) => RHYTHMS.forEach((_, r) => {
+  universeKeys().forEach((_, k) => uvars.forEach((_, v) => RHYTHMS.forEach((_, r) => {
     if (isDue(k, v, r)) dueCount++;
   })));
-  const total = KEYS.length * uvars.length * RHYTHMS.length;
+  const total = universeKeys().length * uvars.length * RHYTHMS.length;
   document.getElementById('sRated').textContent      = rated;
   document.getElementById('sTotalCells').textContent = total;
   document.getElementById('sComfy').textContent      = comfy;
@@ -1367,7 +1374,7 @@ function renderInfo() {
   const item = sr[srKey(ki, vi, ri)];
   const slot = activeUniverse === 'modes'
     ? `${derivedRoot(ki, vi)} ${MODES[vi].name} · ${RHYTHMS[ri].name}`
-    : `${KEYS[ki]} · ${universeVars()[vi].name} · ${RHYTHMS[ri].name}`;
+    : `${universeKeys()[ki]} · ${universeVars()[vi].name} · ${RHYTHMS[ri].name}`;
 
   let srHtml;
   if (!item) {
@@ -1467,7 +1474,7 @@ function buildGrid() {
   h += '</tr></thead><tbody>';
 
   // Data rows: one per key
-  KEYS.forEach((key, k) => {
+  universeKeys().forEach((key, k) => {
     h += `<tr><td class="key-lbl">${key}</td>`;
     uvars.forEach((_, v) => {
       // Each cell = 4 strips, one per rhythm

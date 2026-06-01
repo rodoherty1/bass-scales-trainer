@@ -2,3 +2,7 @@ major-scales/jpgs/*
 !major-scales/jpgs/.gitkeep
 major-scales/pngs/*
 !major-scales/pngs/.gitkeep
+natural-minor/jpgs/*
+!natural-minor/jpgs/.gitkeep
+natural-minor/pngs/*
+!natural-minor/pngs/.gitkeep
