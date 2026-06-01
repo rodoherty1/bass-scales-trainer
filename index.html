@@ -168,7 +168,7 @@
     .light.reaffirm { animation: reaffirm-pulse .45s ease; }
 
     /* Undo button — appears after a comfort rating is made */
-    #undo-comfort {
+    #undo-comfort, #clear-slot {
       height: 28px; padding: 0 10px; border-radius: 14px;
       background: transparent; border: 1px solid var(--border);
       color: var(--muted); font-size: 12px; letter-spacing: .5px;
@@ -176,7 +176,8 @@
       transition: border-color .15s, color .15s;
     }
     #undo-comfort:hover { border-color: var(--accent); color: var(--accent); }
-    #undo-comfort[hidden] { display: none; }
+    #clear-slot:hover   { border-color: #f85149; color: #f85149; }
+    #undo-comfort[hidden], #clear-slot[hidden] { display: none; }
 
     /* EF delta line — fades in on rating, fades out after 2.5 s */
     #ef-delta {
@@ -567,6 +568,7 @@
         <div class="light c2-off" id="l2" onclick="setComfort(2)" title="Getting there  (press 2)">2</div>
         <div class="light c3-off" id="l3" onclick="setComfort(3)" title="Comfortable  (press 3)">3</div>
         <button id="undo-comfort" onclick="undoComfort()" title="Undo last rating" hidden>&#8629; Undo</button>
+        <button id="clear-slot"   onclick="clearSlot()"  title="Clear this slot (press 0)" hidden>Clear</button>
       </div>
       <div id="ef-delta"></div>
     </div>
@@ -1279,6 +1281,20 @@ function renderUndo() {
   document.getElementById('undo-comfort').hidden = !hasUndo;
 }
 
+function clearSlot() {
+  const key = dbKey(ki, vi, ri);
+  const sk  = srKey(ki, vi, ri);
+  if (db[key]) db[key].comfort = 0;
+  delete sr[sk];
+  undoState = null;
+  hideEfDelta();
+  save();
+  renderComfort();
+  renderGrid();
+  renderStats();
+  renderInfo();
+}
+
 function showEfDelta(oldEf, newEf) {
   const el  = document.getElementById('ef-delta');
   const dir = newEf > oldEf + 0.001 ? '↑' : newEf < oldEf - 0.001 ? '↓' : '→';
@@ -1344,6 +1360,7 @@ function renderComfort() {
   document.getElementById('l2').textContent = '2';
   document.getElementById('l3').textContent = '3';
   renderUndo();
+  document.getElementById('clear-slot').hidden = c === 0;
 }
 
 function renderStats() {
@@ -1556,6 +1573,7 @@ document.addEventListener('keydown', e => {
     case 'Space':        e.preventDefault(); navigate('nr'); break;
     case 'Enter':        e.preventDefault(); toggleMetro();  break;
     case 'KeyM':         toggleMute();                        break;
+    case 'Digit0':       clearSlot();                         break;
     case 'Digit1':       setComfort(1);                       break;
     case 'Digit2':       setComfort(2);                       break;
     case 'Digit3':       setComfort(3);                       break;
