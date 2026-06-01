@@ -46,3 +46,17 @@ Scale fingering photos live under universe-specific subfolders:
 Filename convention: `<key-slug>-<type>-<variation-slug>.png`, e.g. `c-major-2-octaves.png`, `a-natural-minor-fretboard.png`.
 
 Sharp keys use spelled-out slugs: `f-sharp`, `c-sharp`, `g-sharp`, `d-sharp`.
+
+## Screenshots
+
+<a href="images/home-screen-with-scale-preview.png">
+  <img src="images/home-screen-with-scale-preview.png" width="600" alt="Scale preview">
+</a>
+
+<a href="images/home-screen-info-panel.png">
+  <img src="images/home-screen-info-panel.png" width="600" alt="Info panel">
+</a>
+
+<a href="images/home-screen-with-hall-of-reps.png">
+  <img src="images/home-screen-with-hall-of-reps.png" width="600" alt="Hall of Reps">
+</a>
