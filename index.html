@@ -691,7 +691,6 @@ const MODES = [
   { name: 'Phrygian',   abbr: 'Phr', degree: 2 },
   { name: 'Lydian',     abbr: 'Lyd', degree: 3 },
   { name: 'Mixolydian', abbr: 'Mix', degree: 4 },
-  { name: 'Aeolian',    abbr: 'Aeo', degree: 5 },
   { name: 'Locrian',    abbr: 'Loc', degree: 6 },
 ];
 
@@ -1375,13 +1374,16 @@ function renderStats() {
   universeKeys().forEach((_, k) => uvars.forEach((_, v) => RHYTHMS.forEach((_, r) => {
     if (isDue(k, v, r)) dueCount++;
   })));
-  const total = universeKeys().length * uvars.length * RHYTHMS.length;
+  const total    = universeKeys().length * uvars.length * RHYTHMS.length;
+  const totalDue = Object.values(sr).filter(
+    item => item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now())
+  ).length;
   document.getElementById('sRated').textContent      = rated;
   document.getElementById('sTotalCells').textContent = total;
   document.getElementById('sComfy').textContent      = comfy;
   const badge = document.getElementById('due-badge');
-  badge.textContent  = `${dueCount} due`;
-  badge.style.display = dueCount > 0 ? '' : 'none';
+  badge.textContent  = `${totalDue} due`;
+  badge.style.display = totalDue > 0 ? '' : 'none';
 }
 
 function renderInfo() {
@@ -1486,7 +1488,7 @@ function buildGrid() {
 
   // Header row
   let h = '<thead><tr><th></th>';
-  uvars.forEach(v => { h += `<th title="${v.name}">${v.abbr}</th>`; });
+  uvars.forEach(v => { h += `<th title="${v.name}">${activeUniverse === 'modes' ? v.name : v.abbr}</th>`; });
   h += '</tr></thead><tbody>';
 
   // Data rows: one per key
