@@ -1,3 +1,5 @@
+bass-trainer-backup-*.json
+PLAN-*.md
 major-scales/jpgs/*
 !major-scales/jpgs/.gitkeep
 major-scales/pngs/*

@@ -786,6 +786,34 @@ function load() {
     migrated = true;
   }
 
+  // Migration C: prune sr keys that no longer correspond to a renderable strip.
+  // Covers: 3-part keys missing the rhythm segment, removed mode/variation names
+  // (e.g. Ionian, Aeolian), and any rhythm name no longer in RHYTHMS.
+  {
+    const validVarsByUniverse = {
+      modes: new Set(MODES.map(m => m.name)),
+    };
+    UNIVERSES.filter(u => u !== 'modes').forEach(u => {
+      validVarsByUniverse[u] = new Set(VARS.map(v => v.name));
+    });
+    const validKeys   = new Set([...KEYS, ...MINOR_KEYS]);
+    const validRhythms = new Set(RHYTHMS.map(r => r.name));
+
+    const before = Object.keys(sr).length;
+    const pruned = {};
+    Object.entries(sr).forEach(([k, v]) => {
+      const parts = k.split('|');
+      if (parts.length !== 4) return;
+      const [univ, root, varName, rhythm] = parts;
+      if (!UNIVERSES.includes(univ))               return;
+      if (!validKeys.has(root))                    return;
+      if (!validVarsByUniverse[univ]?.has(varName)) return;
+      if (!validRhythms.has(rhythm))               return;
+      pruned[k] = v;
+    });
+    if (Object.keys(pruned).length !== before) { sr = pruned; migrated = true; }
+  }
+
   if (migrated) save();
 }
 
