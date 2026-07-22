@@ -712,7 +712,7 @@ const KEY_NOTES = {
 
 const UNIVERSES = ['scales', 'minor', 'modes', 'pentatonic', 'arpeggios'];
 
-const MINOR_KEYS = ['A','E','D','B','G','F#','C','C#','F','G#','Bb','D#'];
+const MINOR_KEYS = ['A','D','G','C','F','Bb','D#','G#','C#','F#','B','E'];
 
 // Filename slug for each natural-minor key
 const MINOR_KEY_SLUGS = {
@@ -750,6 +750,7 @@ let efDeltaTimer  = null;   // timeout handle for fading the EF delta line
 let historyLog    = [];     // { c: 1|2|3, xn: 0–1 } — one entry per RAG click
 let dropQueue     = [];     // comfort levels queued for drop animation
 let isDropping    = false;  // true while an animation frame is running
+let dropCancelled = false;  // set by undoComfort() to abort an in-flight drop
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
@@ -932,10 +933,10 @@ function addHistoryBall(comfort) {
 function processDropQueue() {
   if (dropQueue.length === 0) { isDropping = false; return; }
   isDropping     = true;
+  dropCancelled  = false;
   const comfort  = dropQueue.shift();
   const canvas   = document.getElementById('history-canvas');
 
-  // Always record the ball — even if the tab isn't visible
   const W    = canvas ? canvas.width  : 400;
   const H    = canvas ? canvas.height : 300;
   const R    = hallRadius(W, H);
@@ -951,9 +952,6 @@ function processDropQueue() {
   const xn      = (pick + 0.5) / cols;
   const restY   = H - colH[pick] * 2 * R - R;
 
-  historyLog.push({ c: comfort, xn });
-  saveHistory();
-
   // Animate the drop only when the Hall tab is active
   if (activeTab === 'hall' && canvas) {
     const cx  = (pick + 0.5) * (W / cols);
@@ -962,14 +960,60 @@ function processDropQueue() {
     const ctx = canvas.getContext('2d');
 
     function frame() {
+      // Abort cleanly if undo was pressed while this ball was in flight
+      if (dropCancelled) {
+        drawHistory();
+        return;
+      }
       vy += 0.675;
       y  += vy;
       if (y >= restY) {
+        // Commit the ball now that it has physically arrived
+        historyLog.push({ c: comfort, xn });
+        saveHistory();
         drawHistory();
-        processDropQueue();
+
+        // Ripple splash from the landing point — two concentric rings
+        const SPLASH_FRAMES = 32;
+        let sf = 0;
+        const ballColor = HALL_COLORS[comfort] || '#8b949e';
+        function splash() {
+          sf++;
+          if (sf >= SPLASH_FRAMES || dropCancelled) {
+            processDropQueue();
+            return;
+          }
+          drawHistory();
+          ctx.save();
+
+          // Outer ring: fast, wide, fully opaque at start
+          const t1 = sf / SPLASH_FRAMES;
+          ctx.globalAlpha = (1 - t1);
+          ctx.beginPath();
+          ctx.arc(cx, restY, R + t1 * 4.5 * R, 0, Math.PI * 2);
+          ctx.strokeStyle = ballColor;
+          ctx.lineWidth   = (1 - t1) * 5 + 0.5;
+          ctx.stroke();
+
+          // Inner ring: delayed start, slower fade
+          const INNER_DELAY = 6;
+          if (sf > INNER_DELAY) {
+            const t2 = (sf - INNER_DELAY) / (SPLASH_FRAMES - INNER_DELAY);
+            ctx.globalAlpha = (1 - t2) * 0.7;
+            ctx.beginPath();
+            ctx.arc(cx, restY, R + t2 * 2.5 * R, 0, Math.PI * 2);
+            ctx.strokeStyle = ballColor;
+            ctx.lineWidth   = (1 - t2) * 3 + 0.5;
+            ctx.stroke();
+          }
+
+          ctx.restore();
+          requestAnimationFrame(splash);
+        }
+        requestAnimationFrame(splash);
         return;
       }
-      // Redraw settled balls then paint the in-flight ball on top
+      // Redraw only settled balls — do NOT include the new entry yet, so no ghost
       drawHistory();
       ctx.beginPath();
       ctx.arc(cx, y, Math.max(1, R - 0.5), 0, Math.PI * 2);
@@ -979,6 +1023,9 @@ function processDropQueue() {
     }
     requestAnimationFrame(frame);
   } else {
+    // Tab not visible — record immediately with no animation
+    historyLog.push({ c: comfort, xn });
+    saveHistory();
     processDropQueue();
   }
 }
@@ -1291,6 +1338,7 @@ function undoComfort() {
   save();
   // Remove the history ball added by this rating
   if (histLogLen !== undefined) {
+    dropCancelled = true;
     historyLog.splice(histLogLen);
     dropQueue.length = 0;
     saveHistory();
