@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scale Author</title>
+  <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --surf:        #161b22;
+      --surf2:       #21262d;
+      --border:      #30363d;
+      --border-faint:#1c2128;
+      --text:        #f0f6fc;
+      --muted:       #8b949e;
+      --accent:      #58a6ff;
+      --aglow:       rgba(88,166,255,0.25);
+      --root-bg:     rgba(88,166,255,0.06);
+      --cursor-bg:   rgba(88,166,255,0.18);
+      --note-col:    #58a6ff;
+      --cell-w:      38px;
+      --cell-h:      26px;
+      --label-w:     52px;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      font-size: 14px;
+    }
+
+    /* ── HEADER ── */
+    #header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 54px;
+      background: var(--surf);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    #app-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--accent);
+      white-space: nowrap;
+      margin-right: 4px;
+    }
+
+    .selector-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 6px;
+    }
+
+    .sel-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .sel-btn:hover { color: var(--accent); background: var(--border); }
+
+    .sel-inner { text-align: center; }
+    .sel-main { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .sel-sub  { display: block; font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    /* Mode label is a bare span (no .sel-inner wrapper) — pin its width to "Mixolydian" */
+    #mode-main { display: inline-block; text-align: center; min-width: 88px; }
+    /* Key root: widest is 2 chars ("Gb", "Bb", etc.) */
+    #key-main  { display: inline-block; text-align: center; min-width: 26px; }
+    /* Var: widest is "Lower Neighbour Sequence" / "Upper Neighbour Sequence" */
+    #var-main  { display: inline-block; text-align: center; min-width: 168px; }
+
+    .header-actions { display: flex; gap: 6px; margin-left: auto; }
+
+    .action-btn {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .action-btn.accent {
+      background: rgba(88,166,255,0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .action-btn.accent:hover { background: rgba(88,166,255,0.25); }
+
+    /* ── DURATION STRIP ── */
+    #dur-strip {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #dur-strip .strip-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 4px;
+    }
+
+    .dur-btn {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all .15s;
+    }
+    .dur-btn:hover { color: var(--text); border-color: var(--muted); }
+    .dur-btn.active {
+      background: rgba(88,166,255,0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    #dur-strip .key-hints {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    #dur-strip .key-hints kbd {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 10px;
+      font-family: inherit;
+    }
+
+    /* ── GRID SCROLL AREA ── */
+    #grid-scroll {
+      flex: 2;
+      overflow: auto;
+      position: relative;
+    }
+
+    #grid-table {
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    /* Sticky label column */
+    .pitch-label, .row-label {
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      background: var(--bg);
+      width: var(--label-w);
+      min-width: var(--label-w);
+      max-width: var(--label-w);
+      padding: 0 6px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+      border-right: 1px solid var(--border);
+    }
+
+    .pitch-label.root-label {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    tr.root-row .pitch-label { background: color-mix(in srgb, var(--bg) 92%, var(--accent) 8%); }
+
+    /* Bar header row */
+    #bar-header-row th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--surf);
+      border-bottom: 1px solid var(--border);
+      height: 28px;
+      padding: 0 6px;
+      white-space: nowrap;
+    }
+
+    .corner-cell {
+      position: sticky !important;
+      left: 0;
+      z-index: 6 !important;
+      background: var(--surf) !important;
+      border-right: 1px solid var(--border);
+    }
+
+    .bar-header {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: left;
+      border-left: 2px solid var(--border);
+      padding-left: 6px;
+      cursor: pointer;
+    }
+    .bar-header:hover { color: var(--text); }
+
+    .bar-ts-click {
+      cursor: pointer;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    .bar-ts-click:hover { background: var(--surf2); color: var(--accent); }
+
+    .add-bar-th {
+      padding: 0 8px;
+    }
+
+    /* Grid cells */
+    .cell {
+      width: var(--cell-w);
+      min-width: var(--cell-w);
+      max-width: var(--cell-w);
+      height: var(--cell-h);
+      border-right: 1px solid var(--border-faint);
+      border-bottom: 1px solid var(--border-faint);
+      cursor: pointer;
+      position: relative;
+      vertical-align: middle;
+      text-align: center;
+    }
+
+    .cell.bar-start { border-left: 2px solid var(--border); }
+
+    tr.root-row .cell { background: var(--root-bg); }
+
+    .cell.has-note::after {
+      content: '';
+      display: block;
+      width: 13px; height: 13px;
+      background: var(--note-col);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 6px var(--aglow);
+    }
+
+    .cell.is-cursor {
+      background: var(--cursor-bg) !important;
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      z-index: 2;
+    }
+
+    .cell.has-note.is-cursor::after {
+      background: #fff;
+      box-shadow: 0 0 8px var(--aglow);
+    }
+
+    /* Info rows (Dur / Fng) */
+    .dur-cell, .fng-cell {
+      width: var(--cell-w);
+      min-width: var(--cell-w);
+      height: 26px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      vertical-align: middle;
+      border-right: 1px solid var(--border-faint);
+      padding: 0 2px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .dur-cell.bar-start, .fng-cell.bar-start { border-left: 2px solid var(--border); }
+
+    .dur-cell.cursor-col { color: var(--accent); font-weight: 600; }
+    .fng-cell.cursor-col { color: var(--accent); }
+
+    .row-label {
+      height: 26px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-faint);
+    }
+
+    #dur-row td { border-top: 1px solid var(--border); background: var(--bg); }
+    #fng-row td { border-top: none; background: var(--bg); }
+
+    .end-cell { width: 40px; min-width: 40px; }
+
+    /* ── STATUS BAR ── */
+    #status-bar {
+      flex-shrink: 0;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      background: var(--surf);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      gap: 16px;
+    }
+
+    #status-bar .status-accent { color: var(--accent); font-weight: 600; }
+
+    /* ── FINGERING PICKER ── */
+    #fng-picker {
+      position: fixed;
+      bottom: 28px;
+      right: 16px;
+      background: var(--surf);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 12px 14px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    #fng-picker.hidden { display: none; }
+
+    .fng-section {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .fng-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      width: 46px;
+      flex-shrink: 0;
+    }
+
+    .fng-btn {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 4px 9px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .12s;
+    }
+    .fng-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .fng-btn.active {
+      background: rgba(88,166,255,0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── OUTPUT PANEL ── */
+    #output-panel {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--surf);
+      border-top: 1px solid var(--border);
+      max-height: 200px;
+    }
+    #output-panel.hidden { display: none; }
+
+    #js-output {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: #7ee787;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
+      font-size: 11px;
+      resize: none;
+      height: 110px;
+      outline: none;
+    }
+
+    #output-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ── LOAD OVERLAY ── */
+    #load-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #load-overlay.hidden { display: none; }
+
+    #load-box {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      min-width: 320px;
+      max-width: 500px;
+      max-height: 60vh;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #load-box h3 { font-size: 14px; color: var(--text); }
+
+    #load-list {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .load-entry {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all .12s;
+    }
+    .load-entry:hover { border-color: var(--accent); color: var(--accent); }
+    .load-entry .del-entry {
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .load-entry .del-entry:hover { color: #f85149; background: rgba(248,81,73,0.15); }
+
+    #load-box-actions { display: flex; justify-content: flex-end; }
+
+    /* ── TS PICKER ── */
+    #ts-picker {
+      position: fixed;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      z-index: 80;
+      display: flex;
+      gap: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    #ts-picker.hidden { display: none; }
+
+    .ts-opt {
+      background: var(--surf2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .ts-opt:hover { border-color: var(--accent); color: var(--accent); }
+    .ts-opt.active { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.12); }
+
+    /* ── ADD BAR BUTTON ── */
+    .add-bar-btn {
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .add-bar-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── PREVIEW PANEL ── */
+    #preview-panel {
+      flex: 3;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--surf);
+      border-top: 1px solid var(--border);
+      overflow: hidden;
+    }
+    #preview-panel.hidden { display: none; }
+
+    #preview-panel-inner {
+      flex: 1;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 12px 16px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Row layout: staff above tab strip */
+    #preview-rows { display: flex; flex-direction: column; }
+    .preview-row  { display: flex; flex-direction: column; margin-bottom: 8px; }
+
+    .preview-staff svg { display: block; }
+    .preview-staff { flex-shrink: 0; }
+
+    /* Suppress abcjs title rendered inside per-row staves */
+    .preview-staff .abcjs-title { display: none; }
+
+    /* Override abcjs default white background */
+    .preview-staff svg rect:first-child { fill: transparent !important; }
+    .preview-staff .abcjs-note,
+    .preview-staff .abcjs-staff { stroke: var(--text); fill: var(--text); }
+    .preview-staff text { fill: var(--muted); }
+
+    .preview-tab-svg {
+      display: block;
+      overflow: visible;
+    }
+
+    #preview-empty {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0;
+    }
+
+    /* Staff bar highlight — fill/stroke reaches plain paths/lines; filter reaches <use> note heads */
+    .preview-staff .abcjs-bar-highlight {
+      filter: drop-shadow(0 0 3px var(--accent)) !important;
+    }
+    .preview-staff .abcjs-bar-highlight * {
+      fill: var(--accent) !important;
+      stroke: var(--accent) !important;
+    }
+
+    /* Staff cursor-note highlight — stronger glow + colour shift for stems/ledger lines */
+    .preview-staff .abcjs-note-cursor {
+      filter: drop-shadow(0 0 5px var(--accent))
+              drop-shadow(0 0 2px var(--accent)) !important;
+    }
+    .preview-staff .abcjs-note-cursor * {
+      fill: var(--accent) !important;
+      stroke: var(--accent) !important;
+    }
+
+    /* Tab wrapper — width matched to staff SVG, no horizontal scroll */
+    .preview-tab-wrap {
+      overflow: visible;
+      flex-shrink: 0;
+    }
+
+    /* Tab per-note click-capture rects */
+    .tab-note-click { cursor: pointer; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <span id="app-title">Scale Author</span>
+
+  <div class="selector-group">
+    <button class="sel-btn" id="key-prev">◀</button>
+    <span class="sel-main" id="key-main">D</span>
+    <button class="sel-btn" id="key-next">▶</button>
+  </div>
+
+  <div class="selector-group">
+    <button class="sel-btn" id="mode-prev">◀</button>
+    <span class="sel-main"  id="mode-main">Dorian</span>
+    <button class="sel-btn" id="mode-next">▶</button>
+  </div>
+
+  <div class="selector-group">
+    <button class="sel-btn" id="var-prev">◀</button>
+    <span class="sel-main"  id="var-main">Regular 2 Octaves</span>
+    <button class="sel-btn" id="var-next">▶</button>
+  </div>
+
+  <div class="header-actions">
+    <button class="action-btn" id="btn-new">New</button>
+    <button class="action-btn" id="btn-load">Load ▾</button>
+    <button class="action-btn" id="btn-output-toggle">Output ▾</button>
+    <button class="action-btn accent" id="btn-copy">Copy JS</button>
+    <button class="action-btn" id="btn-export">Export JSON</button>
+  </div>
+</div>
+
+<div id="dur-strip">
+  <span class="strip-label">Duration:</span>
+  <button class="dur-btn" data-d="1">𝅝 Whole</button>
+  <button class="dur-btn" data-d="2">𝅗𝅥 Half</button>
+  <button class="dur-btn" data-d="4">♩ Quarter</button>
+  <button class="dur-btn" data-d="8">♪ Eighth</button>
+  <button class="dur-btn active" data-d="16">♬ 16th</button>
+  <span class="key-hints">
+    <kbd>←→</kbd> navigate &nbsp;
+    <kbd>↑↓</kbd> pitch &nbsp;
+    <kbd>Space</kbd> place/remove &nbsp;
+    <kbd>I</kbd> insert &nbsp;
+    <kbd>|</kbd> split bar &nbsp;
+    <kbd>F</kbd> fingering &nbsp;
+    <kbd>⌫</kbd> delete left &nbsp;
+    <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd><kbd>8</kbd><kbd>6</kbd> duration
+  </span>
+</div>
+
+<div id="grid-scroll">
+  <table id="grid-table">
+    <thead><tr id="bar-header-row"></tr></thead>
+    <tbody id="grid-body"></tbody>
+    <tfoot id="grid-footer"></tfoot>
+  </table>
+</div>
+
+<div id="status-bar">
+  <span id="status-text">—</span>
+</div>
+
+<!-- Fingering picker -->
+<div id="fng-picker" class="hidden">
+  <div class="fng-section">
+    <span class="fng-label">String</span>
+    <button class="fng-btn string-btn" data-s="G">G</button>
+    <button class="fng-btn string-btn" data-s="D">D</button>
+    <button class="fng-btn string-btn" data-s="A">A</button>
+    <button class="fng-btn string-btn" data-s="E">E</button>
+    <button class="fng-btn string-btn" data-s="B">B</button>
+  </div>
+  <div class="fng-section">
+    <span class="fng-label">Finger</span>
+    <button class="fng-btn finger-btn" data-f="1">1</button>
+    <button class="fng-btn finger-btn" data-f="2">2</button>
+    <button class="fng-btn finger-btn" data-f="3">3</button>
+    <button class="fng-btn finger-btn" data-f="4">4</button>
+    <button class="fng-btn finger-btn" data-f="0">Open</button>
+    <button class="fng-btn" id="fng-clear">Clear</button>
+    <button class="fng-btn accent" id="fng-close">Done</button>
+  </div>
+</div>
+
+<!-- Preview panel -->
+<div id="preview-panel">
+  <div id="preview-panel-inner">
+    <div id="preview-rows"></div>
+    <div id="preview-empty" class="hidden">Place some notes to see the preview.</div>
+  </div>
+</div>
+
+<!-- Output panel -->
+<div id="output-panel" class="hidden">
+  <textarea id="js-output" readonly spellcheck="false"></textarea>
+  <div id="output-actions">
+    <button class="action-btn accent" id="btn-copy-js">Copy JS</button>
+    <button class="action-btn" id="btn-export-json">Export JSON</button>
+  </div>
+</div>
+
+<!-- Load overlay -->
+<div id="load-overlay" class="hidden">
+  <div id="load-box">
+    <h3>Saved entries</h3>
+    <div id="load-list"></div>
+    <div id="load-box-actions">
+      <button class="action-btn" id="btn-load-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Time-signature picker (positioned dynamically) -->
+<div id="ts-picker" class="hidden">
+  <button class="ts-opt" data-ts="2/4">2/4</button>
+  <button class="ts-opt" data-ts="3/4">3/4</button>
+  <button class="ts-opt" data-ts="4/4">4/4</button>
+  <button class="ts-opt" data-ts="6/8">6/8</button>
+</div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTS  (mirrored from bass-scales-trainer/index.html)
+═══════════════════════════════════════════════════════════ */
+const KEYS = ['C','F','Bb','Eb','Ab','Db','Gb','B','E','A','D','G'];
+
+const MODES = [
+  { name: 'Dorian',     slug: 'dorian',     degree: 1 },
+  { name: 'Phrygian',   slug: 'phrygian',   degree: 2 },
+  { name: 'Lydian',     slug: 'lydian',     degree: 3 },
+  { name: 'Mixolydian', slug: 'mixolydian', degree: 4 },
+  { name: 'Locrian',    slug: 'locrian',    degree: 6 },
+];
+
+const VARS = [
+  { name: 'Regular 2 Octaves',        slug: '2-octaves'   },
+  { name: 'Running the Fretboard',    slug: 'fretboard'   },
+  { name: 'Four Note Sequence',       slug: '4-note-seq'  },
+  { name: 'Three Note Sequence',      slug: '3-note-seq'  },
+  { name: 'Sequential Seconds',       slug: 'seq-seconds' },
+  { name: 'Lower Neighbour Sequence', slug: 'lower-nbr'   },
+  { name: 'Upper Neighbour Sequence', slug: 'upper-nbr'   },
+  { name: '1231 Sequence',            slug: '1231'        },
+];
+
+const KEY_NOTES = {
+  'C':  ['C','D','E','F','G','A','B'],
+  'F':  ['F','G','A','Bb','C','D','E'],
+  'Bb': ['Bb','C','D','Eb','F','G','A'],
+  'Eb': ['Eb','F','G','Ab','Bb','C','D'],
+  'Ab': ['Ab','Bb','C','Db','Eb','F','G'],
+  'Db': ['Db','Eb','F','Gb','Ab','Bb','C'],
+  'Gb': ['Gb','Ab','Bb','Cb','Db','Eb','F'],
+  'B':  ['B','C#','D#','E','F#','G#','A#'],
+  'E':  ['E','F#','G#','A','B','C#','D#'],
+  'A':  ['A','B','C#','D','E','F#','G#'],
+  'D':  ['D','E','F#','G','A','B','C#'],
+  'G':  ['G','A','B','C','D','E','F#'],
+};
+
+// Chromatic position 0–11 (C=0 … B=11)
+const CHROMA = {
+  'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,
+  'E':4,'Fb':4,'F':5,'F#':6,'Gb':6,'G':7,
+  'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11,'Cb':11,
+};
+
+const DUR_SYMBOLS  = { 1:'𝅝', 2:'𝅗𝅥', 4:'♩', 8:'♪', 16:'♬' };
+const DUR_NAMES    = { 1:'whole', 2:'half', 4:'quarter', 8:'eighth', 16:'16th' };
+
+const STORAGE_KEY   = 'scale-author-v1';
+const NUM_OCTAVES   = 2;   // octaves of scale shown in grid (+ 1 final root = 15 rows for 7-note scale)
+const DEFAULT_START_OCT = 2;
+const DEFAULT_DUR   = 16;
+const DEFAULT_TS    = '4/4';
+const DEFAULT_COLS  = 8;   // empty columns for a new bar
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+let parentKeyIdx = 0;
+let modeIdx      = 0;
+let varIdx       = 0;
+
+// bars: [{ ts: '4/4', cols: [{note: null|{n,oct,s,f}, d: int}] }]
+let bars = [];
+
+let cBar = 0;   // cursor bar index
+let cCol = 0;   // cursor column index within bar
+let cRow = 0;   // cursor row index within pitchRows (0 = highest pitch)
+
+let defDur = DEFAULT_DUR;
+let pitchRows = [];        // [{n, oct, label, isRoot, noteName}] high→low
+
+let fngPickerOpen   = false;
+let tsPicker_barIdx = -1;  // which bar the ts picker is editing
+let selectedBarIdx  = null;
+let _noteElMap      = null;  // [barIdx][noteInBar] → abcjs-note DOM element
+
+/* ═══════════════════════════════════════════════════════════
+   PITCH-ROW COMPUTATION
+═══════════════════════════════════════════════════════════ */
+
+function getModeNoteNames() {
+  const notes = KEY_NOTES[KEYS[parentKeyIdx]];
+  const d     = MODES[modeIdx].degree;
+  return [...notes.slice(d), ...notes.slice(0, d)];
+}
+
+function getModeRoot() {
+  return KEY_NOTES[KEYS[parentKeyIdx]][MODES[modeIdx].degree];
+}
+
+/**
+ * Build pitch rows high→low.
+ * numOctaves full repetitions of the 7-note scale + 1 final root note at the top.
+ * Uses chromatic ordering to increment octave at the right point.
+ */
+function buildPitchRows(noteNames, startOct, numOctaves) {
+  const asc = [];
+  let oct = startOct;
+  let prevChroma = CHROMA[noteNames[0]];
+
+  for (let rep = 0; rep < numOctaves; rep++) {
+    for (let i = 0; i < 7; i++) {
+      const name  = noteNames[i];
+      const chrom = CHROMA[name];
+      if (rep === 0 && i === 0) {
+        // first note — use startOct as-is
+      } else if (chrom <= prevChroma) {
+        oct++;
+      }
+      prevChroma = chrom;
+      asc.push({ n: i + 1, oct, label: name + oct, isRoot: i === 0, noteName: name });
+    }
+  }
+
+  // Final root at the top
+  const rootName  = noteNames[0];
+  const rootChrom = CHROMA[rootName];
+  if (rootChrom <= prevChroma) oct++;
+  asc.push({ n: 1, oct, label: rootName + oct, isRoot: true, noteName: rootName });
+
+  return asc.reverse(); // high → low for the grid (row 0 = highest pitch)
+}
+
+function rebuildPitchRows() {
+  pitchRows = buildPitchRows(getModeNoteNames(), DEFAULT_START_OCT, NUM_OCTAVES);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ENTRY KEY & STORAGE
+═══════════════════════════════════════════════════════════ */
+
+function getEntryKey() {
+  const root    = getModeRoot();
+  const modeSl  = MODES[modeIdx].slug;
+  const varSl   = VARS[varIdx].slug;
+  return `${root}|${modeSl}|${varSl}`;
+}
+
+function getStorage() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveCurrentEntry() {
+  const store = getStorage();
+  store[getEntryKey()] = { bars: JSON.parse(JSON.stringify(bars)) };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+
+function loadEntry(key) {
+  const store = getStorage();
+  if (store[key]) {
+    bars = JSON.parse(JSON.stringify(store[key].bars));
+    cBar = 0; cCol = 0; cRow = pitchRows.length - 1;
+    return true;
+  }
+  return false;
+}
+
+function deleteEntry(key) {
+  const store = getStorage();
+  delete store[key];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+
+function newEmptyBars() {
+  const cols = Array.from({ length: DEFAULT_COLS }, () => ({ note: null, d: defDur }));
+  return [{ ts: DEFAULT_TS, cols }];
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GRID RENDERING (full re-render)
+═══════════════════════════════════════════════════════════ */
+
+function cellId(bi, ci, ri)  { return `c-${bi}-${ci}-${ri}`; }
+function durCellId(bi, ci)   { return `d-${bi}-${ci}`; }
+function fngCellId(bi, ci)   { return `g-${bi}-${ci}`; }
+
+function fngDisplay(note) {
+  if (!note || note.s == null) return '';
+  const fStr = note.f === 0 ? 'O' : (note.f != null ? note.f : '?');
+  return `${note.s}:${fStr}`;
+}
+
+function rowIdxForNote(note) {
+  return pitchRows.findIndex(r => r.n === note.n && r.oct === note.oct);
+}
+
+function renderGrid() {
+  // ── Bar header row ──────────────────────────────────────
+  let hHTML = `<th class="corner-cell"></th>`;
+  bars.forEach((bar, bi) => {
+    hHTML += `<th colspan="${bar.cols.length}" class="bar-header">
+      Bar ${bi + 1}&nbsp;
+      <span class="bar-ts-click" data-bar="${bi}">${bar.ts}</span>
+    </th>`;
+  });
+  hHTML += `<th class="add-bar-th"><button class="add-bar-btn" id="add-bar-btn">＋ Bar</button></th>`;
+  document.getElementById('bar-header-row').innerHTML = hHTML;
+
+  // ── Pitch rows ──────────────────────────────────────────
+  let bHTML = '';
+  pitchRows.forEach((pr, ri) => {
+    bHTML += `<tr class="${pr.isRoot ? 'root-row' : ''}">`;
+    bHTML += `<td class="pitch-label ${pr.isRoot ? 'root-label' : ''}">${pr.label}</td>`;
+
+    bars.forEach((bar, bi) => {
+      bar.cols.forEach((col, ci) => {
+        const hasNote = col.note && col.note.n === pr.n && col.note.oct === pr.oct;
+        const isCur   = bi === cBar && ci === cCol && ri === cRow;
+        const barStart = ci === 0 && bi > 0;
+        const cls = ['cell',
+          hasNote  ? 'has-note'  : '',
+          isCur    ? 'is-cursor' : '',
+          barStart ? 'bar-start' : '',
+        ].filter(Boolean).join(' ');
+        bHTML += `<td class="${cls}" id="${cellId(bi,ci,ri)}"
+          data-bar="${bi}" data-col="${ci}" data-row="${ri}"></td>`;
+      });
+    });
+
+    bHTML += `<td class="end-cell"></td></tr>`;
+  });
+  document.getElementById('grid-body').innerHTML = bHTML;
+
+  // ── Footer rows (Dur + Fng) ─────────────────────────────
+  let durHTML = `<td class="row-label">Dur</td>`;
+  let fngHTML = `<td class="row-label">Fng</td>`;
+
+  bars.forEach((bar, bi) => {
+    bar.cols.forEach((col, ci) => {
+      const isCurCol = bi === cBar && ci === cCol;
+      const barStart = ci === 0 && bi > 0;
+      const bsCls    = barStart ? ' bar-start' : '';
+
+      durHTML += `<td class="dur-cell${bsCls}${isCurCol ? ' cursor-col' : ''}"
+        id="${durCellId(bi,ci)}">${DUR_SYMBOLS[col.d] || '?'}</td>`;
+
+      const fg = fngDisplay(col.note);
+      fngHTML += `<td class="fng-cell${bsCls}${isCurCol ? ' cursor-col' : ''}"
+        id="${fngCellId(bi,ci)}">${fg}</td>`;
+    });
+  });
+  durHTML += `<td></td>`;
+  fngHTML += `<td></td>`;
+
+  document.getElementById('grid-footer').innerHTML =
+    `<tr id="dur-row">${durHTML}</tr><tr id="fng-row">${fngHTML}</tr>`;
+
+  // ── Wire events ─────────────────────────────────────────
+  document.querySelectorAll('.cell').forEach(td => td.addEventListener('click', onCellClick));
+  document.getElementById('add-bar-btn').addEventListener('click', addBar);
+  document.querySelectorAll('.bar-ts-click').forEach(el =>
+    el.addEventListener('click', e => { e.stopPropagation(); openTsPicker(parseInt(el.dataset.bar), el); })
+  );
+
+  updateOutput();
+  updateStatusBar();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TARGETED DOM UPDATES (no full re-render)
+═══════════════════════════════════════════════════════════ */
+
+function updateCursorVisuals() {
+  document.querySelectorAll('.cell.is-cursor').forEach(c => c.classList.remove('is-cursor'));
+  document.querySelectorAll('.dur-cell.cursor-col,.fng-cell.cursor-col').forEach(c => c.classList.remove('cursor-col'));
+
+  const cell = document.getElementById(cellId(cBar, cCol, cRow));
+  if (cell) {
+    cell.classList.add('is-cursor');
+    cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  const durCell = document.getElementById(durCellId(cBar, cCol));
+  const fngCell = document.getElementById(fngCellId(cBar, cCol));
+  if (durCell) durCell.classList.add('cursor-col');
+  if (fngCell) fngCell.classList.add('cursor-col');
+  syncCursorToPreview();
+}
+
+function updateCellVisual(bi, ci) {
+  const col = bars[bi]?.cols[ci];
+  if (!col) return;
+
+  // Update note dots for this column across all rows
+  pitchRows.forEach((pr, ri) => {
+    const cell = document.getElementById(cellId(bi, ci, ri));
+    if (!cell) return;
+    const hasNote = col.note && col.note.n === pr.n && col.note.oct === pr.oct;
+    cell.classList.toggle('has-note', !!hasNote);
+  });
+
+  // Update dur/fng footer
+  const durEl = document.getElementById(durCellId(bi, ci));
+  const fngEl = document.getElementById(fngCellId(bi, ci));
+  if (durEl) durEl.textContent = DUR_SYMBOLS[col.d] || '?';
+  if (fngEl) fngEl.textContent = fngDisplay(col.note);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CURSOR MOVEMENT
+═══════════════════════════════════════════════════════════ */
+
+function snapRowToNote() {
+  const note = bars[cBar]?.cols[cCol]?.note;
+  if (note) {
+    const ri = rowIdxForNote(note);
+    if (ri >= 0) cRow = ri;
+  }
+}
+
+function moveCursorLeft() {
+  if (cCol > 0) {
+    cCol--;
+  } else if (cBar > 0) {
+    cBar--;
+    cCol = bars[cBar].cols.length - 1;
+  } else {
+    return;
+  }
+  snapRowToNote();
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+function moveCursorRight() {
+  const totalCols = bars[cBar].cols.length;
+  if (cCol < totalCols - 1) {
+    cCol++;
+  } else if (cBar < bars.length - 1) {
+    cBar++;
+    cCol = 0;
+  } else {
+    // Extend last bar
+    bars[cBar].cols.push({ note: null, d: defDur });
+    saveCurrentEntry();
+    renderGrid();  // need new cell in DOM
+    cCol = bars[cBar].cols.length - 1;
+    snapRowToNote();
+    updateCursorVisuals();
+    updateStatusBar();
+    return;
+  }
+  snapRowToNote();
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+function moveCursorUp() {
+  if (cRow <= 0) return;
+  const col  = bars[cBar].cols[cCol];
+  const note = col?.note;
+  if (note) {
+    note.n   = pitchRows[cRow - 1].n;
+    note.oct = pitchRows[cRow - 1].oct;
+    updateCellVisual(cBar, cCol);
+    saveCurrentEntry();
+    updateOutput();
+  }
+  cRow--;
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+function moveCursorDown() {
+  if (cRow >= pitchRows.length - 1) return;
+  const col  = bars[cBar].cols[cCol];
+  const note = col?.note;
+  if (note) {
+    note.n   = pitchRows[cRow + 1].n;
+    note.oct = pitchRows[cRow + 1].oct;
+    updateCellVisual(cBar, cCol);
+    saveCurrentEntry();
+    updateOutput();
+  }
+  cRow++;
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NOTE OPERATIONS
+═══════════════════════════════════════════════════════════ */
+
+function toggleNoteAtCursor() {
+  const col  = bars[cBar].cols[cCol];
+  const pr   = pitchRows[cRow];
+  const note = col.note;
+
+  if (note && note.n === pr.n && note.oct === pr.oct) {
+    col.note = null;
+  } else {
+    col.note = { n: pr.n, oct: pr.oct, s: note?.s ?? null, f: note?.f ?? null };
+  }
+
+  updateCellVisual(cBar, cCol);
+  saveCurrentEntry();
+  updateOutput();
+  updateStatusBar();
+}
+
+/**
+ * Derive a time signature from merged column content.
+ * D = finest note value present (max d_i).
+ * N = total duration expressed in D-units.
+ * Reduce N/D by the largest factor that keeps the denominator >= 4,
+ * preserving musically meaningful denominators (e.g. 2/2 stays 2/2,
+ * 16/16 reduces to 4/4).
+ */
+function computeMergedTs(cols) {
+  if (cols.length === 0) return DEFAULT_TS;
+  const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+  const D = Math.max(...cols.map(c => c.d));
+  const N = cols.reduce((sum, c) => sum + D / c.d, 0);
+  const g = gcd(N, D);
+  let f = 1;
+  for (let k = g; k >= 2; k--) {
+    if (g % k === 0 && D / k >= 4) { f = k; break; }
+  }
+  return `${N / f}/${D / f}`;
+}
+
+/**
+ * Delete the object immediately to the left of the cursor:
+ * - cCol > 0: remove the column at cCol-1; cursor rides left with its note.
+ * - cCol === 0, cBar > 0: merge this bar with the previous bar (removes the
+ *   bar separator); TS is recomputed from the merged column content.
+ * - cBar === 0, cCol === 0: no-op (nothing to the left).
+ */
+function deleteLeft() {
+  if (cBar === 0 && cCol === 0) return;
+
+  if (cCol > 0) {
+    bars[cBar].cols.splice(cCol - 1, 1);
+    cCol -= 1;
+    bars[cBar].ts = computeMergedTs(bars[cBar].cols);
+  } else {
+    const leftBar    = bars[cBar - 1];
+    const rightBar   = bars[cBar];
+    const leftLen    = leftBar.cols.length;
+    const mergedCols = [...leftBar.cols, ...rightBar.cols];
+    bars.splice(cBar - 1, 2, { ts: computeMergedTs(mergedCols), cols: mergedCols });
+    cBar -= 1;
+    cCol  = leftLen;
+  }
+
+  saveCurrentEntry();
+  renderGrid();
+  updateCursorVisuals();
+  updateOutput();
+  updateStatusBar();
+}
+
+function setDefaultDuration(d) {
+  defDur = d;
+  // Update active state on duration buttons
+  document.querySelectorAll('.dur-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.d) === d);
+  });
+  // Also update current column's duration
+  const col = bars[cBar]?.cols[cCol];
+  if (col) {
+    col.d = d;
+    bars[cBar].ts = computeMergedTs(bars[cBar].cols);
+    const durEl = document.getElementById(durCellId(cBar, cCol));
+    if (durEl) durEl.textContent = DUR_SYMBOLS[d];
+    saveCurrentEntry();
+    updateOutput();
+  }
+}
+
+function onCellClick(e) {
+  const td = e.currentTarget;
+  const bi = parseInt(td.dataset.bar);
+  const ci = parseInt(td.dataset.col);
+  const ri = parseInt(td.dataset.row);
+
+  // Close any pickers
+  closeTsPicker();
+
+  // First click on a non-cursor column: move cursor only, do not edit the note.
+  if (bi !== cBar || ci !== cCol) {
+    cBar = bi; cCol = ci; cRow = ri;
+    snapRowToNote();
+    updateCursorVisuals();
+    updateStatusBar();
+    return;
+  }
+
+  const col  = bars[bi].cols[ci];
+  const pr   = pitchRows[ri];
+  const note = col.note;
+
+  if (note && note.n === pr.n && note.oct === pr.oct) {
+    col.note = null;
+  } else {
+    const preserved = note ? { s: note.s, f: note.f } : { s: null, f: null };
+    col.note = { n: pr.n, oct: pr.oct, ...preserved };
+  }
+
+  cBar = bi; cCol = ci; cRow = ri;
+  snapRowToNote();
+
+  updateCellVisual(bi, ci);
+  updateCursorVisuals();
+  saveCurrentEntry();
+  updateOutput();
+  updateStatusBar();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BAR MANAGEMENT
+═══════════════════════════════════════════════════════════ */
+
+function addBar() {
+  const cols = Array.from({ length: DEFAULT_COLS }, () => ({ note: null, d: defDur }));
+  bars.push({ ts: DEFAULT_TS, cols });
+  saveCurrentEntry();
+  renderGrid();
+}
+
+/** Insert an empty column at the cursor position, shifting everything right. */
+function insertColBefore() {
+  bars[cBar].cols.splice(cCol, 0, { note: null, d: defDur });
+  bars[cBar].ts = computeMergedTs(bars[cBar].cols);
+  saveCurrentEntry();
+  renderGrid();
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+/**
+ * Split the current bar at the cursor position.
+ * Columns [0..cCol) stay in the current bar; [cCol..] become a new bar after it.
+ * No-op if cCol === 0 (cursor is already at the start of a bar).
+ */
+function splitBarAtCursor() {
+  if (cCol === 0) return;
+  const bar       = bars[cBar];
+  const leftCols  = bar.cols.slice(0, cCol);
+  const rightCols = bar.cols.slice(cCol);
+  bars.splice(cBar, 1,
+    { ts: computeMergedTs(leftCols),  cols: leftCols  },
+    { ts: computeMergedTs(rightCols), cols: rightCols },
+  );
+  cBar += 1;
+  cCol  = 0;
+  saveCurrentEntry();
+  renderGrid();
+  updateCursorVisuals();
+  updateStatusBar();
+}
+
+function openTsPicker(barIdx, anchorEl) {
+  tsPicker_barIdx = barIdx;
+  const picker = document.getElementById('ts-picker');
+  const rect   = anchorEl.getBoundingClientRect();
+
+  // Mark active option
+  picker.querySelectorAll('.ts-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.ts === bars[barIdx].ts);
+  });
+
+  picker.style.left = rect.left + 'px';
+  picker.style.top  = (rect.bottom + 4) + 'px';
+  picker.classList.remove('hidden');
+}
+
+function closeTsPicker() {
+  document.getElementById('ts-picker').classList.add('hidden');
+  tsPicker_barIdx = -1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FINGERING PICKER
+═══════════════════════════════════════════════════════════ */
+
+function openFingeringPicker() {
+  fngPickerOpen = true;
+  const note  = bars[cBar]?.cols[cCol]?.note;
+  const picker = document.getElementById('fng-picker');
+
+  picker.querySelectorAll('.string-btn').forEach(btn => {
+    btn.classList.toggle('active', note?.s === btn.dataset.s);
+  });
+  picker.querySelectorAll('.finger-btn').forEach(btn => {
+    btn.classList.toggle('active', note?.f === parseInt(btn.dataset.f));
+  });
+
+  picker.classList.remove('hidden');
+}
+
+function closeFingeringPicker() {
+  fngPickerOpen = false;
+  document.getElementById('fng-picker').classList.add('hidden');
+}
+
+function toggleFingeringPicker() {
+  fngPickerOpen ? closeFingeringPicker() : openFingeringPicker();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SELECTOR CHANGES (key / mode / var)
+═══════════════════════════════════════════════════════════ */
+
+function applySelectors() {
+  selectedBarIdx = null;
+  const root    = getModeRoot();
+  const parent  = KEYS[parentKeyIdx];
+
+  document.getElementById('key-main').textContent  = root;
+  document.getElementById('mode-main').textContent = MODES[modeIdx].name;
+  document.getElementById('var-main').textContent  = VARS[varIdx].name;
+
+  rebuildPitchRows();
+
+  const key = getEntryKey();
+  if (!loadEntry(key)) {
+    bars = newEmptyBars();
+    cBar = 0; cCol = 0; cRow = pitchRows.length - 1;
+  }
+
+  renderGrid();
+}
+
+function cycleKey(dir) {
+  parentKeyIdx = (parentKeyIdx + dir + KEYS.length) % KEYS.length;
+  applySelectors();
+}
+
+function cycleMode(dir) {
+  modeIdx = (modeIdx + dir + MODES.length) % MODES.length;
+  applySelectors();
+}
+
+function cycleVar(dir) {
+  varIdx = (varIdx + dir + VARS.length) % VARS.length;
+  applySelectors();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS BAR
+═══════════════════════════════════════════════════════════ */
+
+function updateStatusBar() {
+  const pr   = pitchRows[cRow];
+  const col  = bars[cBar]?.cols[cCol];
+  const note = col?.note;
+  const deg  = pr ? `Deg ${pr.n}${pr.isRoot ? ' (root)' : ''}` : '';
+  const dur  = `${DUR_SYMBOLS[col?.d ?? defDur]} ${DUR_NAMES[col?.d ?? defDur]}`;
+  const fng  = note ? fngDisplay(note) : '—';
+  const pos  = pr ? `<span class="status-accent">${pr.label}</span>` : '';
+  const fngS = fng !== '—' ? `&nbsp;·&nbsp;<span class="status-accent">${fng}</span>` : '';
+
+  document.getElementById('status-text').innerHTML =
+    `${pos}&nbsp;·&nbsp;${deg}&nbsp;·&nbsp;${dur}${fngS}&nbsp;·&nbsp;Bar ${cBar + 1}, pos ${cCol + 1}`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   JS OUTPUT GENERATION
+═══════════════════════════════════════════════════════════ */
+
+function generateJS() {
+  const key = getEntryKey();
+  const outBars = bars
+    .map(bar => {
+      const notes = bar.cols
+        .filter(col => col.note != null)
+        .map(col => {
+          const n = col.note;
+          const parts = [`n: ${n.n}`, `oct: ${n.oct}`, `d: ${col.d}`];
+          if (n.s != null) parts.push(`s: '${n.s}'`);
+          if (n.f != null) parts.push(`f: ${n.f}`);
+          return `        { ${parts.join(', ')} }`;
+        });
+      return `    {\n      ts: '${bar.ts}',\n      notes: [\n${notes.join(',\n')}\n      ]\n    }`;
+    });
+
+  return `"${key}": {\n  bars: [\n${outBars.join(',\n')}\n  ]\n}`;
+}
+
+function updateOutput() {
+  const el = document.getElementById('js-output');
+  if (el) el.value = generateJS();
+  schedulePreview();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PREVIEW — ABC generation + tab SVG
+═══════════════════════════════════════════════════════════ */
+
+// Open-string MIDI numbers for standard 5-string bass (B1 E2 A2 D3 G3)
+const OPEN_STRING_MIDI = { 'B': 35, 'E': 40, 'A': 45, 'D': 50, 'G': 55 };
+const STRING_ORDER = ['G','D','A','E','B'];  // top → bottom in tab
+
+// Tab SVG layout — shared between renderRowTabSVG() and syncCursorToPreview()
+const TAB_LEFT_PAD    = 24;
+const TAB_RIGHT_PAD   = 16;
+const TAB_TOP_PAD     = 8;
+const TAB_STRING_GAP  = 18;
+const TAB_NUM_STRINGS = 5;
+const TAB_COL_W       = 36;
+const BARS_PER_ROW    = 2;
+
+function noteMidi(noteName, oct) {
+  return 12 * (oct + 1) + CHROMA[noteName];
+}
+
+function computeFret(noteName, oct, stringName) {
+  const fret = noteMidi(noteName, oct) - OPEN_STRING_MIDI[stringName];
+  return (fret >= 0 && fret <= 24) ? fret : null;
+}
+
+/**
+ * Convert a note (name + oct) to an ABC pitch token.
+ * oct=2 → uppercase + comma  (C,)
+ * oct=3 → uppercase           (C)
+ * oct=4 → lowercase           (c)
+ * oct=5 → lowercase + apos    (c')
+ */
+function noteToABC(noteName, oct) {
+  // Strip accidental for ABC letter — key sig handles the accidental automatically
+  const letter = noteName[0];
+  if (oct <= 2) return letter + ',';
+  if (oct === 3) return letter;
+  if (oct === 4) return letter.toLowerCase();
+  return letter.toLowerCase() + "'";
+}
+
+/** Beat size in 16th-note units, driven by time signature. */
+function beatSize16ths(ts) {
+  return (ts === '6/8' || ts === '9/8' || ts === '12/8') ? 6 : 4;
+}
+
+/**
+ * Build the ABC token string for one bar's columns.
+ * Accepts the trimmed column slice (first note → last note inclusive).
+ * Null-note columns become ABC rest tokens (z).
+ * Notes within the same beat are joined WITHOUT spaces so abcjs beams them.
+ * Different beat groups are separated by a single space (beam break).
+ */
+function beamGroupABC(cols, ts, modeNotes) {
+  if (cols.length === 0) return '';
+
+  const beat    = beatSize16ths(ts);
+  const groups  = [];
+  let   group   = [];
+  let   fill    = 0;   // 16th-note units accumulated in current beat group
+
+  cols.forEach(col => {
+    const dur16ths = 16 / col.d;
+    const mult     = dur16ths;
+
+    // ── Rest column ──────────────────────────────────────────
+    if (col.note === null) {
+      // Rests break beams — flush current group first
+      if (group.length) { groups.push(group.join('')); group = []; }
+      groups.push(mult === 1 ? 'z' : `z${mult}`);
+      fill = (fill + dur16ths) % beat;
+      return;
+    }
+
+    // ── Note column ──────────────────────────────────────────
+    const { n, oct } = col.note;
+    const noteName   = modeNotes[n - 1];
+    const abcPitch   = noteToABC(noteName, oct);
+    const token      = mult === 1 ? abcPitch : `${abcPitch}${mult}`;
+
+    // A long note (≥ beat size) always gets its own group
+    if (dur16ths >= beat) {
+      if (group.length) { groups.push(group.join('')); group = []; fill = 0; }
+      groups.push(token);
+      fill = 0;
+      return;
+    }
+
+    // Would adding this note cross a beat boundary? Flush first.
+    if (fill > 0 && fill + dur16ths > beat) {
+      groups.push(group.join(''));
+      group = []; fill = 0;
+    }
+
+    group.push(token);
+    fill += dur16ths;
+
+    // Exactly filled a beat — flush
+    if (fill >= beat) {
+      groups.push(group.join(''));
+      group = []; fill = 0;
+    }
+  });
+
+  if (group.length) groups.push(group.join(''));
+
+  return groups.join(' ');
+}
+
+/**
+ * abcjs clickListener callback.
+ * Read bar index from data-bar-idx stamped on each note element by buildNoteElMap().
+ * Falls back to abcjs-mN class parsing for non-note clicks (e.g. barlines).
+ */
+function onStaffClick(abcElem, tuneNumber, classes, analysis, drag, mouseEvent) {
+  if (!mouseEvent) return;
+  // Prefer the data-bar-idx attribute stamped on note elements by buildNoteElMap
+  const noteEl = mouseEvent.target.closest('[data-bar-idx]');
+  if (noteEl) { syncHighlight(parseInt(noteEl.dataset.barIdx)); return; }
+  // Fallback: parse abcjs-mN class (works when measure classes are globally sequential)
+  if (!classes) return;
+  for (const cls of String(classes).split(/\s+/)) {
+    const m = /^abcjs-m(\d+)$/.exec(cls);
+    if (m) { syncHighlight(parseInt(m[1])); return; }
+  }
+}
+
+/**
+ * Highlight barIdx in the staff and the tab bar highlight rect.
+ * Optionally move the grid cursor to (barIdx, col).
+ * Pass null to clear all highlights.
+ */
+function syncHighlight(barIdx, col = 0) {
+  selectedBarIdx = barIdx;
+
+  // 1. Staff highlight — apply to note elements for this bar via _noteElMap
+  document.querySelectorAll('.preview-staff .abcjs-bar-highlight').forEach(el =>
+    el.classList.remove('abcjs-bar-highlight')
+  );
+  if (barIdx !== null && _noteElMap?.[barIdx]) {
+    _noteElMap[barIdx].forEach(el => el.classList.add('abcjs-bar-highlight'));
+  }
+
+  // 2. Tab highlight — toggle opacity on pre-rendered highlight rects
+  bars.forEach((_, bi) => {
+    const rect = document.getElementById(`tab-bar-highlight-${bi}`);
+    if (rect) rect.setAttribute('opacity', bi === barIdx ? '1' : '0');
+  });
+
+  // 3. Scroll preview panel so the selected row is visible
+  if (barIdx !== null) {
+    const ri     = Math.floor(barIdx / BARS_PER_ROW);
+    const rowDiv = document.getElementById(`preview-tab-wrap-${ri}`)?.closest('.preview-row');
+    if (rowDiv) rowDiv.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // 4. Move grid cursor
+  if (barIdx !== null && barIdx < bars.length) {
+    cBar = barIdx;
+    cCol = col;
+    snapRowToNote();
+    updateCursorVisuals();
+    updateStatusBar();
+  }
+}
+
+/**
+ * Sync per-note cursor highlights in the tab SVG and staff after any cursor move.
+ * No-op when the preview panel is hidden.
+ */
+function syncCursorToPreview() {
+  if (document.getElementById('preview-panel').classList.contains('hidden')) return;
+
+  // ── Tab cursor-note rect (per-row) ───────────────────────
+  const ri       = Math.floor(cBar / BARS_PER_ROW);
+  const rowStart = ri * BARS_PER_ROW;
+  const cursorRect = document.getElementById(`tab-cursor-note-${ri}`);
+  if (cursorRect) {
+    const cursorNote = bars[cBar]?.cols[cCol]?.note;
+    if (cursorNote != null) {
+      // Row-local note index = notes in row bars before cBar + notes in cBar before cCol
+      let localIdx = 0;
+      for (let b = rowStart; b < cBar; b++) {
+        localIdx += bars[b].cols.filter(c => c.note != null).length;
+      }
+      localIdx += bars[cBar].cols.slice(0, cCol).filter(c => c.note != null).length;
+      cursorRect.setAttribute('x', TAB_LEFT_PAD + localIdx * TAB_COL_W);
+      cursorRect.setAttribute('opacity', '1');
+    } else {
+      cursorRect.setAttribute('opacity', '0');
+    }
+  }
+
+  // ── Staff cursor-note highlight ──────────────────────────
+  document.querySelectorAll('.preview-staff .abcjs-note-cursor').forEach(el =>
+    el.classList.remove('abcjs-note-cursor')
+  );
+  const cursorColNote = bars[cBar]?.cols[cCol]?.note;
+  if (cursorColNote != null && _noteElMap) {
+    const p  = bars[cBar].cols.slice(0, cCol + 1).filter(c => c.note != null).length - 1;
+    const el = _noteElMap[cBar]?.[p];
+    if (el) el.classList.add('abcjs-note-cursor');
+  }
+}
+
+/**
+ * Generate ABC notation for a single row of bars (startBar..endBar inclusive).
+ * Omits the title field so abcjs renders no title text inside the SVG.
+ */
+function generateABCForRow(startBar, endBar) {
+  const parentKey = KEYS[parentKeyIdx];
+  const modeNotes = getModeNoteNames();
+  const rowBars   = bars.slice(startBar, Math.min(endBar + 1, bars.length));
+  const firstTs   = rowBars[0]?.ts || DEFAULT_TS;
+
+  let abc = `X:1\n`;
+  abc += `M:${firstTs}\n`;
+  abc += `L:1/16\n`;
+  abc += `%%stafflines 5\n`;
+  abc += `K:${parentKey} bass\n`;
+
+  rowBars.forEach((bar, i) => {
+    if (i > 0 && bar.ts !== rowBars[i - 1].ts) {
+      abc += `[M:${bar.ts}]`;
+    }
+
+    const noteCols = bar.cols.filter(col => col.note != null);
+    if (noteCols.length > 0) {
+      const firstIdx = bar.cols.findIndex(col => col.note != null);
+      const lastIdx  = bar.cols.length - 1 - [...bar.cols].reverse().findIndex(col => col.note != null);
+      abc += beamGroupABC(bar.cols.slice(firstIdx, lastIdx + 1), bar.ts, modeNotes);
+    }
+    abc += i < rowBars.length - 1 ? ' |' : ' |]';
+    abc += '\n';
+  });
+
+  return abc;
+}
+
+function generateABC() {
+  const parentKey  = KEYS[parentKeyIdx];
+  const modeRoot   = getModeRoot();
+  const modeNotes  = getModeNoteNames();
+  const modeName   = MODES[modeIdx].name;
+  const varName    = VARS[varIdx].name;
+
+  // Use first bar's time signature for M: field
+  const firstTs = bars[0]?.ts || DEFAULT_TS;
+
+  let abc = `X:1\n`;
+  abc += `T:${modeRoot} ${modeName} — ${varName}\n`;
+  abc += `M:${firstTs}\n`;
+  abc += `L:1/16\n`;
+  abc += `%%stafflines 5\n`;
+  abc += `K:${parentKey} bass\n`;
+
+  bars.forEach((bar, bi) => {
+    // Change time sig mid-tune if bars differ
+    if (bi > 0 && bar.ts !== bars[bi - 1].ts) {
+      abc += `[M:${bar.ts}]`;
+    }
+
+    const noteCols = bar.cols.filter(col => col.note != null);
+    if (noteCols.length > 0) {
+      // Trim to the span between first and last note; empty slots within become rests.
+      const firstIdx = bar.cols.findIndex(col => col.note != null);
+      const lastIdx  = bar.cols.length - 1 - [...bar.cols].reverse().findIndex(col => col.note != null);
+      abc += beamGroupABC(bar.cols.slice(firstIdx, lastIdx + 1), bar.ts, modeNotes);
+    }
+    abc += bi < bars.length - 1 ? ' |' : ' |]';
+    const isLast    = bi === bars.length - 1;
+    const isLineEnd = isLast || (bi % 2 === 1);
+    abc += isLineEnd ? '\n' : ' ';
+  });
+
+  return abc;
+}
+
+/**
+ * Render the 5-string tab SVG for a single row into `preview-tab-svg-{ri}`.
+ * tabWidth should match the rendered width of the corresponding staff SVG.
+ * Finger numbers (note.f) are drawn below the string lines where assigned.
+ */
+function renderRowTabSVG(ri, startBar, endBar, tabWidth) {
+  const svg = document.getElementById(`preview-tab-svg-${ri}`);
+  if (!svg) return;
+
+  const modeNotes = getModeNoteNames();
+  const rowNotes  = [];  // [{col, bi, ci}] ordered for this row
+
+  for (let bi = startBar; bi <= endBar && bi < bars.length; bi++) {
+    bars[bi].cols.forEach((col, ci) => {
+      if (col.note != null) rowNotes.push({ col, bi, ci });
+    });
+  }
+
+  const NOTE_COUNT = rowNotes.length;
+  const FINGER_ROW_H = 14;  // extra height below strings for finger numbers
+  const TOTAL_H = TAB_TOP_PAD + (TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + TAB_TOP_PAD + FINGER_ROW_H;
+
+  svg.setAttribute('width',   tabWidth);
+  svg.setAttribute('height',  TOTAL_H);
+  svg.setAttribute('viewBox', `0 0 ${tabWidth} ${TOTAL_H}`);
+
+  // Row-local note index → x centre
+  const noteX = ni => TAB_LEFT_PAD + ni * TAB_COL_W + TAB_COL_W / 2;
+
+  // Bar start in row-local note index space (keyed by global barIdx)
+  const barLocalStart = {};  // barIdx → first row-local note index in that bar
+  rowNotes.forEach(({ bi }, ni) => {
+    if (!(bi in barLocalStart)) barLocalStart[bi] = ni;
+  });
+
+  const parts = [];
+
+  // Per-bar highlight rects (behind everything)
+  for (let bi = startBar; bi <= endBar && bi < bars.length; bi++) {
+    const ni0    = bi in barLocalStart ? barLocalStart[bi] : NOTE_COUNT;
+    const ni1    = (() => {
+      for (let b = bi + 1; b <= endBar && b < bars.length; b++) {
+        if (b in barLocalStart) return barLocalStart[b];
+      }
+      return NOTE_COUNT;
+    })();
+    const x1 = TAB_LEFT_PAD + ni0 * TAB_COL_W;
+    const w  = (ni1 - ni0) * TAB_COL_W;
+    if (w <= 0) continue;
+    parts.push(`<rect id="tab-bar-highlight-${bi}" x="${x1}" y="${TAB_TOP_PAD - 4}"
+      width="${w}" height="${(TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + 8}" rx="3"
+      fill="rgba(88,166,255,0.12)" opacity="${selectedBarIdx === bi ? 1 : 0}"
+      class="tab-bar-highlight"/>`);
+  }
+
+  // String lines + labels
+  STRING_ORDER.forEach((s, si) => {
+    const y = TAB_TOP_PAD + si * TAB_STRING_GAP;
+    parts.push(`<line x1="${TAB_LEFT_PAD}" y1="${y}" x2="${tabWidth - TAB_RIGHT_PAD}" y2="${y}"
+      stroke="#30363d" stroke-width="1"/>`);
+    parts.push(`<text x="${TAB_LEFT_PAD - 4}" y="${y + 4}" text-anchor="end"
+      font-size="10" fill="#8b949e" font-family="monospace">${s}</text>`);
+  });
+
+  // Bar lines (between bars within the row)
+  for (let bi = startBar + 1; bi <= endBar && bi < bars.length; bi++) {
+    if (!(bi in barLocalStart)) continue;
+    const x = TAB_LEFT_PAD + barLocalStart[bi] * TAB_COL_W;
+    parts.push(`<line x1="${x}" y1="${TAB_TOP_PAD - 4}" x2="${x}"
+      y2="${TAB_TOP_PAD + (TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + 4}"
+      stroke="#30363d" stroke-width="1.5"/>`);
+  }
+
+  // Fret numbers + finger numbers
+  rowNotes.forEach(({ col }, ni) => {
+    const { note } = col;
+    if (!note.s) return;
+
+    const noteName = modeNotes[note.n - 1];
+    const fret     = computeFret(noteName, note.oct, note.s);
+    if (fret === null) return;
+
+    const si  = STRING_ORDER.indexOf(note.s);
+    if (si < 0) return;
+
+    const x       = noteX(ni);
+    const y       = TAB_TOP_PAD + si * TAB_STRING_GAP;
+    const isRoot  = note.n === 1;
+    const bgCol   = isRoot ? 'rgba(88,166,255,0.25)' : '#161b22';
+    const txtCol  = isRoot ? '#58a6ff' : '#f0f6fc';
+    const fretStr = String(fret);
+    const bw      = fretStr.length > 1 ? 18 : 14;
+
+    parts.push(`<rect x="${x - bw / 2}" y="${y - 8}" width="${bw}" height="14"
+      rx="2" fill="${bgCol}"/>`);
+    parts.push(`<text x="${x}" y="${y + 4}" text-anchor="middle"
+      font-size="11" fill="${txtCol}" font-weight="${isRoot ? 700 : 400}"
+      font-family="monospace">${fretStr}</text>`);
+
+    // Finger number below string lines
+    if (note.f) {
+      const fy = TAB_TOP_PAD + (TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + TAB_TOP_PAD + 2;
+      parts.push(`<text x="${x}" y="${fy}" text-anchor="middle"
+        font-size="10" fill="#8b949e" font-family="monospace">${note.f}</text>`);
+    }
+  });
+
+  svg.innerHTML = parts.join('\n');
+
+  // Cursor-note highlight rect (position set by syncCursorToPreview)
+  const cursorNoteRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  cursorNoteRect.setAttribute('id', `tab-cursor-note-${ri}`);
+  cursorNoteRect.setAttribute('y',      TAB_TOP_PAD - 4);
+  cursorNoteRect.setAttribute('width',  TAB_COL_W);
+  cursorNoteRect.setAttribute('height', (TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + 8);
+  cursorNoteRect.setAttribute('rx',     '3');
+  cursorNoteRect.setAttribute('fill',   'rgba(88,166,255,0.45)');
+  cursorNoteRect.setAttribute('opacity', '0');
+  svg.appendChild(cursorNoteRect);
+
+  // Per-note transparent click-capture rects
+  rowNotes.forEach(({ bi, ci }, ni) => {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x',      TAB_LEFT_PAD + ni * TAB_COL_W);
+    rect.setAttribute('y',      TAB_TOP_PAD - 4);
+    rect.setAttribute('width',  TAB_COL_W);
+    rect.setAttribute('height', (TAB_NUM_STRINGS - 1) * TAB_STRING_GAP + 8);
+    rect.setAttribute('fill',   'transparent');
+    rect.classList.add('tab-note-click');
+    rect.dataset.bar = bi;
+    rect.dataset.col = ci;
+    svg.appendChild(rect);
+  });
+
+  // Click delegation for this row's SVG
+  svg.addEventListener('click', e => {
+    const target = e.target.closest('.tab-note-click');
+    if (target) syncHighlight(parseInt(target.dataset.bar), parseInt(target.dataset.col));
+  });
+}
+
+// Debounced preview renderer
+let _previewTimer = null;
+
+/**
+ * Build a 2-D map from (barIdx, noteInBar) → abcjs-note DOM element by walking
+ * all .abcjs-note elements in document order — which matches the order notes
+ * appear in the generated ABC string — and correlating them with bars[].
+ * Also stamps each element with data-bar-idx for onStaffClick lookup.
+ * Must be called immediately after ABCJS.renderAbc() so the DOM is fresh.
+ */
+function buildNoteElMap() {
+  const allNoteEls = [...document.querySelectorAll('.preview-staff .abcjs-note')];
+  let elIdx = 0;
+  _noteElMap = bars.map((bar, bi) => {
+    const barMap = [];
+    bar.cols.forEach(col => {
+      if (col.note != null && elIdx < allNoteEls.length) {
+        const el = allNoteEls[elIdx++];
+        el.dataset.barIdx = bi;
+        barMap.push(el);
+      }
+    });
+    return barMap;
+  });
+}
+function schedulePreview() {
+  if (document.getElementById('preview-panel').classList.contains('hidden')) return;
+  clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(renderPreview, 300);
+}
+
+function renderPreview() {
+  const rowsEl  = document.getElementById('preview-rows');
+  const emptyEl = document.getElementById('preview-empty');
+
+  const hasNotes = bars.some(bar => bar.cols.some(col => col.note != null));
+
+  if (!hasNotes) {
+    rowsEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+
+  emptyEl.classList.add('hidden');
+  rowsEl.innerHTML = '';
+
+  if (typeof ABCJS === 'undefined') {
+    rowsEl.innerHTML = '<span style="color:var(--muted);font-size:12px">abcjs not loaded — check network connection.</span>';
+    return;
+  }
+
+  const SCALE      = 1.5;
+  const panelW     = document.getElementById('preview-panel').offsetWidth;
+  const staffwidth = Math.max(400, Math.floor(panelW / SCALE) - 24);
+
+  for (let ri = 0, startBar = 0; startBar < bars.length; ri++, startBar += BARS_PER_ROW) {
+    const endBar = Math.min(startBar + BARS_PER_ROW - 1, bars.length - 1);
+
+    // Build row container
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'preview-row';
+
+    // Staff div
+    const staffDiv = document.createElement('div');
+    staffDiv.className = 'preview-staff';
+    staffDiv.id = `preview-staff-${ri}`;
+    rowDiv.appendChild(staffDiv);
+
+    // Tab wrap + SVG
+    const tabWrap = document.createElement('div');
+    tabWrap.className = 'preview-tab-wrap';
+    tabWrap.id = `preview-tab-wrap-${ri}`;
+    const tabSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    tabSvg.id = `preview-tab-svg-${ri}`;
+    tabSvg.classList.add('preview-tab-svg');
+    tabWrap.appendChild(tabSvg);
+    rowDiv.appendChild(tabWrap);
+
+    rowsEl.appendChild(rowDiv);
+
+    // Render staff (synchronous)
+    ABCJS.renderAbc(`preview-staff-${ri}`, generateABCForRow(startBar, endBar), {
+      staffwidth,
+      scale:         SCALE,
+      paddingleft:   0,
+      paddingright:  0,
+      paddingtop:    4,
+      paddingbottom: 4,
+      add_classes:   true,
+      dragging:      false,
+      clickListener: onStaffClick,
+    });
+
+    // Match tab width to rendered staff SVG width
+    const staffSvgEl = staffDiv.querySelector('svg');
+    const tabWidth   = staffSvgEl
+      ? (parseFloat(staffSvgEl.getAttribute('width')) || staffwidth * SCALE)
+      : staffwidth * SCALE;
+
+    renderRowTabSVG(ri, startBar, endBar, tabWidth);
+  }
+
+  buildNoteElMap();
+  syncCursorToPreview();
+}
+
+
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity  = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  }
+}
+
+function flashBtn(btn, msg) {
+  const orig = btn.textContent;
+  btn.textContent = msg;
+  btn.disabled    = true;
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200);
+}
+
+function exportJSON() {
+  const store = getStorage();
+  const blob  = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href      = url;
+  a.download  = 'scale-author-export.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOAD OVERLAY
+═══════════════════════════════════════════════════════════ */
+
+function openLoadOverlay() {
+  const store   = getStorage();
+  const entries = Object.keys(store);
+  const list    = document.getElementById('load-list');
+
+  if (entries.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No saved entries yet.</div>';
+  } else {
+    list.innerHTML = entries.map(k =>
+      `<div class="load-entry" data-key="${k}">
+        <span>${k}</span>
+        <span class="del-entry" data-key="${k}" title="Delete">✕</span>
+      </div>`
+    ).join('');
+
+    list.querySelectorAll('.load-entry').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.classList.contains('del-entry')) return;
+        const k = el.dataset.key;
+        // Parse the key to set selectors
+        const [root, modeSlug, varSlug] = k.split('|');
+        const mi = MODES.findIndex(m => m.slug === modeSlug);
+        const vi = VARS.findIndex(v => v.slug === varSlug);
+        if (mi < 0 || vi < 0) return;
+        modeIdx = mi;
+        varIdx  = vi;
+        // Find parent key index: the key whose modeIdx-degree note = root
+        const pki = KEYS.findIndex(pk => KEY_NOTES[pk][MODES[mi].degree] === root);
+        if (pki < 0) return;
+        parentKeyIdx = pki;
+        closeLoadOverlay();
+        applySelectors();
+      });
+    });
+
+    list.querySelectorAll('.del-entry').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        const k = el.dataset.key;
+        deleteEntry(k);
+        openLoadOverlay(); // refresh
+      });
+    });
+  }
+
+  document.getElementById('load-overlay').classList.remove('hidden');
+}
+
+function closeLoadOverlay() {
+  document.getElementById('load-overlay').classList.add('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KEYBOARD HANDLER
+═══════════════════════════════════════════════════════════ */
+
+document.addEventListener('keydown', e => {
+  // Don't intercept while typing in textareas
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  // Don't intercept if ts-picker is open (handled separately)
+  if (!document.getElementById('ts-picker').classList.contains('hidden')) {
+    if (e.key === 'Escape') closeTsPicker();
+    return;
+  }
+
+  switch (e.key) {
+    case 'ArrowLeft':  e.preventDefault(); moveCursorLeft();  break;
+    case 'ArrowRight': e.preventDefault(); moveCursorRight(); break;
+    case 'ArrowUp':    e.preventDefault(); moveCursorUp();    break;
+    case 'ArrowDown':  e.preventDefault(); moveCursorDown();  break;
+    case ' ':          e.preventDefault(); toggleNoteAtCursor(); break;
+    case 'Backspace':  e.preventDefault(); deleteLeft();         break;
+    case 'i':
+    case 'I':          e.preventDefault(); insertColBefore();   break;
+    case '|':          e.preventDefault(); splitBarAtCursor();  break;
+    case 'f':
+    case 'F':          e.preventDefault(); toggleFingeringPicker(); break;
+    case 'Escape':     closeFingeringPicker(); closeTsPicker(); break;
+    case '1':          setDefaultDuration(1);  break;
+    case '2':          setDefaultDuration(2);  break;
+    case '4':          setDefaultDuration(4);  break;
+    case '8':          setDefaultDuration(8);  break;
+    case '6':          setDefaultDuration(16); break;  // '6' for 16th
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   EVENT WIRING
+═══════════════════════════════════════════════════════════ */
+
+document.getElementById('key-prev').addEventListener('click',  () => cycleKey(-1));
+document.getElementById('key-next').addEventListener('click',  () => cycleKey(1));
+document.getElementById('mode-prev').addEventListener('click', () => cycleMode(-1));
+document.getElementById('mode-next').addEventListener('click', () => cycleMode(1));
+document.getElementById('var-prev').addEventListener('click',  () => cycleVar(-1));
+document.getElementById('var-next').addEventListener('click',  () => cycleVar(1));
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  bars = newEmptyBars();
+  cBar = 0; cCol = 0; cRow = pitchRows.length - 1;
+  saveCurrentEntry();
+  renderGrid();
+});
+
+document.getElementById('btn-load').addEventListener('click', openLoadOverlay);
+document.getElementById('btn-load-close').addEventListener('click', closeLoadOverlay);
+
+document.getElementById('btn-output-toggle').addEventListener('click', () => {
+  document.getElementById('output-panel').classList.toggle('hidden');
+});
+
+document.getElementById('btn-copy').addEventListener('click', async function () {
+  await copyToClipboard(generateJS());
+  flashBtn(this, '✓ Copied!');
+});
+
+document.getElementById('btn-copy-js').addEventListener('click', async function () {
+  await copyToClipboard(generateJS());
+  flashBtn(this, '✓ Copied!');
+});
+
+document.getElementById('btn-export').addEventListener('click', exportJSON);
+document.getElementById('btn-export-json').addEventListener('click', exportJSON);
+
+// Duration strip buttons
+document.querySelectorAll('.dur-btn').forEach(btn => {
+  btn.addEventListener('click', () => setDefaultDuration(parseInt(btn.dataset.d)));
+});
+
+// Fingering picker — string buttons
+document.querySelectorAll('.string-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const col = bars[cBar]?.cols[cCol];
+    if (!col) return;
+    if (!col.note) col.note = { n: pitchRows[cRow].n, oct: pitchRows[cRow].oct, s: null, f: null };
+    col.note.s = btn.dataset.s;
+    btn.closest('#fng-picker').querySelectorAll('.string-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateCellVisual(cBar, cCol);
+    updateCursorVisuals();
+    saveCurrentEntry();
+    updateOutput();
+    updateStatusBar();
+  });
+});
+
+// Fingering picker — finger buttons
+document.querySelectorAll('.finger-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const col = bars[cBar]?.cols[cCol];
+    if (!col) return;
+    if (!col.note) col.note = { n: pitchRows[cRow].n, oct: pitchRows[cRow].oct, s: null, f: null };
+    col.note.f = parseInt(btn.dataset.f);
+    btn.closest('#fng-picker').querySelectorAll('.finger-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateCellVisual(cBar, cCol);
+    saveCurrentEntry();
+    updateOutput();
+    updateStatusBar();
+  });
+});
+
+document.getElementById('fng-clear').addEventListener('click', () => {
+  const col = bars[cBar]?.cols[cCol];
+  if (col?.note) { col.note.s = null; col.note.f = null; }
+  document.querySelectorAll('#fng-picker .fng-btn').forEach(b => b.classList.remove('active'));
+  updateCellVisual(cBar, cCol);
+  saveCurrentEntry();
+  updateOutput();
+  updateStatusBar();
+});
+
+document.getElementById('fng-close').addEventListener('click', closeFingeringPicker);
+
+// Time-signature picker
+document.querySelectorAll('.ts-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (tsPicker_barIdx >= 0) {
+      bars[tsPicker_barIdx].ts = btn.dataset.ts;
+      saveCurrentEntry();
+      renderGrid();
+    }
+    closeTsPicker();
+  });
+});
+
+// Close ts-picker on outside click
+document.addEventListener('click', e => {
+  if (!document.getElementById('ts-picker').classList.contains('hidden')) {
+    if (!document.getElementById('ts-picker').contains(e.target) &&
+        !e.target.classList.contains('bar-ts-click')) {
+      closeTsPicker();
+    }
+  }
+});
+
+// Close load overlay on backdrop click
+document.getElementById('load-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('load-overlay')) closeLoadOverlay();
+});
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+
+(function init() {
+  rebuildPitchRows();
+  const key = getEntryKey();
+  if (!loadEntry(key)) {
+    bars = newEmptyBars();
+    cBar = 0; cCol = 0; cRow = pitchRows.length - 1;
+  }
+  applySelectors();
+  renderPreview();
+})();
+</script>
+</body>
+</html>
