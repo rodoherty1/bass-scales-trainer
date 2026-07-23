@@ -423,6 +423,10 @@
       letter-spacing: .5px; padding: 2px 4px 10px; text-align: center;
       white-space: nowrap; font-weight: 400;
     }
+    /* Column headers double as the Circle of 4ths mode toggle */
+    thead th[data-v]      { cursor: pointer; transition: color .15s; }
+    thead th[data-v]:hover { color: var(--text); }
+    thead th.circle-on     { color: #d4af37; font-weight: 700; }
     .key-lbl {
       font-size: 15px; font-weight: 700; color: var(--muted);
       padding: 3px 12px 3px 0; text-align: right; white-space: nowrap;
@@ -442,6 +446,8 @@
     .gcell.sel {
       box-shadow: 0 0 0 2px var(--accent), 0 0 10px var(--aglow);
     }
+    /* Thin gold frame groups every key's cell in a Circle of 4ths column */
+    .gcell.circle-on { border: 1px solid rgba(212,175,55,0.55); }
 
     /* One strip per rhythm inside each cell */
     .strip {
@@ -742,6 +748,12 @@ let db  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → { comfort: 0–3, bpm }
 let sr  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → SM-2 record
 let activeUniverse = 'scales';  // 'scales' | 'modes'
 
+// Circle of 4ths mode — "UNIVERSE|VAR|RHYTHM" → true.
+// When active, one rating is broadcast across all 12 keys (see setComfort()),
+// representing a single unbroken run through the whole circle of 4ths rather
+// than per-key drilling. Reversible at any time; no data is reset on toggle.
+let circleMode = {};
+
 // Undo support — snapshot taken before each setComfort() call
 let undoState     = null;   // { ki, vi, ri, comfort, bpm, srSnap } or null
 let efDeltaTimer  = null;   // timeout handle for fading the EF delta line
@@ -757,15 +769,17 @@ let dropCancelled = false;  // set by undoComfort() to abort an in-flight drop
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { const p = JSON.parse(raw); db = p.db || {}; bpm = p.bpm || 80; sr = p.sr || {}; }
+    if (raw) { const p = JSON.parse(raw); db = p.db || {}; bpm = p.bpm || 80; sr = p.sr || {}; circleMode = p.circleMode || {}; }
   } catch (_) {}
 
-  // Migration A: cap any intervals already above 60 days and mark them due now
+  // Migration A: cap any intervals already above MAX_INTERVAL_DAYS and reschedule
+  // them for a review MAX_INTERVAL_DAYS from now (rather than "due immediately"),
+  // so a lowered cap doesn't dump a large backlog into the due-badge all at once.
   let migrated = false;
   Object.values(sr).forEach(item => {
-    if (item.interval > 60) {
-      item.interval = 60;
-      item.dueDate  = Date.now();
+    if (item.interval > MAX_INTERVAL_DAYS) {
+      item.interval = MAX_INTERVAL_DAYS;
+      item.dueDate  = startOfDay(Date.now() + MAX_INTERVAL_DAYS * 86_400_000);
       migrated = true;
     }
   });
@@ -813,13 +827,27 @@ function load() {
       pruned[k] = v;
     });
     if (Object.keys(pruned).length !== before) { sr = pruned; migrated = true; }
+
+    // Same validation, but for circleMode's 3-part "UNIVERSE|VAR|RHYTHM" keys.
+    const beforeCircle = Object.keys(circleMode).length;
+    const prunedCircle = {};
+    Object.entries(circleMode).forEach(([k, v]) => {
+      const parts = k.split('|');
+      if (parts.length !== 3) return;
+      const [univ, varName, rhythm] = parts;
+      if (!UNIVERSES.includes(univ))               return;
+      if (!validVarsByUniverse[univ]?.has(varName)) return;
+      if (!validRhythms.has(rhythm))               return;
+      prunedCircle[k] = v;
+    });
+    if (Object.keys(prunedCircle).length !== beforeCircle) { circleMode = prunedCircle; migrated = true; }
   }
 
   if (migrated) save();
 }
 
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ db, bpm, sr })); } catch (_) {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ db, bpm, sr, circleMode })); } catch (_) {}
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
@@ -855,6 +883,7 @@ function saveHistory() {
 // ─── Hall of Reps ─────────────────────────────────────────────────────────────
 
 const HALL_COLORS = { 1: '#da3633', 2: '#e3b341', 3: '#3fb950' };
+const CIRCLE_RING_COLOR = '#d4af37'; // gold ring marks a Circle of 4ths completion
 
 // Size the canvas pixel buffer to match its CSS layout dimensions
 function sizeHallCanvas() {
@@ -915,6 +944,11 @@ function drawHistory() {
     ctx.arc(cx, cy, Math.max(1, R - 0.5), 0, Math.PI * 2);
     ctx.fillStyle = HALL_COLORS[b.c] || '#8b949e';
     ctx.fill();
+    if (b.special) {
+      ctx.lineWidth   = Math.max(1, R * 0.25);
+      ctx.strokeStyle = CIRCLE_RING_COLOR;
+      ctx.stroke();
+    }
   });
 
   // Rep count label — bottom-right, subtle
@@ -925,8 +959,8 @@ function drawHistory() {
   ctx.fillText(`${n} rep${n !== 1 ? 's' : ''} logged`, W - 8, H - 6);
 }
 
-function addHistoryBall(comfort) {
-  dropQueue.push(comfort);
+function addHistoryBall(comfort, special = false) {
+  dropQueue.push({ comfort, special });
   if (!isDropping) processDropQueue();
 }
 
@@ -934,7 +968,7 @@ function processDropQueue() {
   if (dropQueue.length === 0) { isDropping = false; return; }
   isDropping     = true;
   dropCancelled  = false;
-  const comfort  = dropQueue.shift();
+  const { comfort, special } = dropQueue.shift();
   const canvas   = document.getElementById('history-canvas');
 
   const W    = canvas ? canvas.width  : 400;
@@ -969,14 +1003,15 @@ function processDropQueue() {
       y  += vy;
       if (y >= restY) {
         // Commit the ball now that it has physically arrived
-        historyLog.push({ c: comfort, xn });
+        historyLog.push({ c: comfort, xn, special });
         saveHistory();
         drawHistory();
 
-        // Ripple splash from the landing point — two concentric rings
+        // Ripple splash from the landing point — two concentric rings.
+        // A Circle of 4ths completion splashes gold instead of its RAG color.
         const SPLASH_FRAMES = 32;
         let sf = 0;
-        const ballColor = HALL_COLORS[comfort] || '#8b949e';
+        const ballColor = special ? CIRCLE_RING_COLOR : (HALL_COLORS[comfort] || '#8b949e');
         function splash() {
           sf++;
           if (sf >= SPLASH_FRAMES || dropCancelled) {
@@ -1019,12 +1054,17 @@ function processDropQueue() {
       ctx.arc(cx, y, Math.max(1, R - 0.5), 0, Math.PI * 2);
       ctx.fillStyle = HALL_COLORS[comfort] || '#8b949e';
       ctx.fill();
+      if (special) {
+        ctx.lineWidth   = Math.max(1, R * 0.25);
+        ctx.strokeStyle = CIRCLE_RING_COLOR;
+        ctx.stroke();
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   } else {
     // Tab not visible — record immediately with no animation
-    historyLog.push({ c: comfort, xn });
+    historyLog.push({ c: comfort, xn, special });
     saveHistory();
     processDropQueue();
   }
@@ -1036,7 +1076,22 @@ function notesSlot(k, v) { return `${activeUniverse}|${universeKeys()[k]}|${univ
 // Each key+variation slot gets its own SR record tracking when to review.
 // Quality mapping: 1 (Hard)→2 fail, 2 (OK)→3 halve interval, 3 (Easy)→5 grow interval.
 
+const MAX_INTERVAL_DAYS = 30; // hard ceiling on SM-2 interval growth, keeps the due-grid useful
+
 function srKey(k, v, r) { return `${activeUniverse}|${universeKeys()[k]}|${universeVars()[v].name}|${RHYTHMS[r].name}`; }
+
+// ─── Circle of 4ths mode ───────────────────────────────────────────────────────
+
+function circleKey(v, r) { return `${activeUniverse}|${universeVars()[v].name}|${RHYTHMS[r].name}`; }
+function isCircleMode(v, r) { return !!circleMode[circleKey(v, r)]; }
+function toggleCircleMode(v) {
+  // Toggles all 4 rhythms of a variation together — "2 Octaves" is either in
+  // Circle of 4ths mode or it isn't; individual rhythms within it stay in sync
+  // with each other (you still choose which rhythm to practise, per the strip).
+  const nowOn = !isCircleMode(v, 0);
+  RHYTHMS.forEach((_, r) => { circleMode[circleKey(v, r)] = nowOn; });
+  save();
+}
 
 function sm2Update(k, v, r, quality) {
   const key  = srKey(k, v, r);
@@ -1051,7 +1106,7 @@ function sm2Update(k, v, r, quality) {
     } else if (item.repetitions === 1) {
       item.interval = 6;                                                        // second Easy pass → 6 days
     } else {
-      item.interval = Math.min(60, Math.round(item.interval * item.easeFactor)); // Easy: grow, cap 60 days
+      item.interval = Math.min(MAX_INTERVAL_DAYS, Math.round(item.interval * item.easeFactor)); // Easy: grow, capped
     }
     item.repetitions++;
   } else {
@@ -1288,13 +1343,23 @@ function setComfort(level) {
   const srK    = srKey(ki, vi, ri);
   const oldEf  = sr[srK] ? sr[srK].easeFactor : 2.50;
 
-  // Snapshot state BEFORE applying the new rating so Undo can restore it exactly
+  // Snapshot state BEFORE applying the new rating so Undo can restore it exactly.
+  // In Circle of 4ths mode, every key is about to be overwritten, so snapshot
+  // all 12 of them (not just the currently-selected one) for a full undo.
+  const circleRun = isCircleMode(vi, ri);
   undoState = {
     ki, vi, ri,
     comfort: ent.comfort,
     bpm:     ent.bpm,
     srSnap:  sr[srK] ? { ...sr[srK] } : null,
     histLogLen: historyLog.length,
+    circleSnap: circleRun
+      ? universeKeys().map((_, k) => ({
+          k,
+          db: db[dbKey(k, vi, ri)] ? { ...db[dbKey(k, vi, ri)] } : null,
+          sr: sr[srKey(k, vi, ri)] ? { ...sr[srKey(k, vi, ri)] } : null,
+        }))
+      : null,
   };
 
   const reaffirm = ent.comfort === level;
@@ -1302,6 +1367,20 @@ function setComfort(level) {
   ent.bpm = bpm;
   const quality = [0, 2, 3, 5][level]; // 1→fail(2), 2→pass(3), 3→perfect(5)
   sm2Update(ki, vi, ri, quality);
+
+  // Circle of 4ths mode: this one rating represents an unbroken run through all
+  // 12 keys, so copy the resulting db/sr record onto every other key verbatim
+  // (rather than recomputing per key, which would let ease factors drift apart).
+  if (circleRun) {
+    const srcDb = db[dbKey(ki, vi, ri)];
+    const srcSr = sr[srK];
+    universeKeys().forEach((_, k) => {
+      if (k === ki) return;
+      db[dbKey(k, vi, ri)] = { ...srcDb };
+      sr[srKey(k, vi, ri)] = { ...srcSr };
+    });
+  }
+
   save();
   renderComfort();
   renderGrid();
@@ -1321,18 +1400,29 @@ function setComfort(level) {
   const newEf = sr[srK] ? sr[srK].easeFactor : 2.50;
   showEfDelta(oldEf, newEf);
 
-  addHistoryBall(level);
+  addHistoryBall(level, circleRun);
 }
 
 function undoComfort() {
   if (!undoState) return;
-  const { ki: k, vi: v, ri: r, comfort, bpm: b, srSnap, histLogLen } = undoState;
+  const { ki: k, vi: v, ri: r, comfort, bpm: b, srSnap, histLogLen, circleSnap } = undoState;
   const key = dbKey(k, v, r);
   if (!db[key]) db[key] = { comfort: 0, bpm: b };
   db[key].comfort = comfort;
   db[key].bpm     = b;
   const sk = srKey(k, v, r);
   if (srSnap) sr[sk] = srSnap; else delete sr[sk];
+
+  // Circle of 4ths mode broadcast the rating to all 12 keys — restore all of them
+  if (circleSnap) {
+    circleSnap.forEach(({ k: ok, db: dbSnap, sr: srSnap2 }) => {
+      const okDbKey = dbKey(ok, v, r);
+      const okSrKey = srKey(ok, v, r);
+      if (dbSnap) db[okDbKey] = dbSnap; else delete db[okDbKey];
+      if (srSnap2) sr[okSrKey] = srSnap2; else delete sr[okSrKey];
+    });
+  }
+
   undoState = null;
   hideEfDelta();
   save();
@@ -1451,9 +1541,21 @@ function renderStats() {
     if (isDue(k, v, r)) dueCount++;
   })));
   const total    = universeKeys().length * uvars.length * RHYTHMS.length;
-  const totalDue = Object.values(sr).filter(
-    item => item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now())
-  ).length;
+  // Circle of 4ths slots broadcast one rating to all 12 keys, so their due dates
+  // are always identical — count each (universe|variation|rhythm) group once
+  // rather than once per key, or the badge would overstate the backlog by 12x.
+  const seenCircleGroups = new Set();
+  let totalDue = 0;
+  Object.entries(sr).forEach(([key, item]) => {
+    if (!(item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now()))) return;
+    const [univ, , varName, rhythm] = key.split('|');
+    const groupKey = `${univ}|${varName}|${rhythm}`;
+    if (circleMode[groupKey]) {
+      if (seenCircleGroups.has(groupKey)) return;
+      seenCircleGroups.add(groupKey);
+    }
+    totalDue++;
+  });
   document.getElementById('sRated').textContent      = rated;
   document.getElementById('sTotalCells').textContent = total;
   document.getElementById('sComfy').textContent      = comfy;
@@ -1550,8 +1652,11 @@ Rate it with <b>1</b>, <b>2</b>, or <b>3</b> to start tracking.</p>`;
           <li><b style="color:var(--c2)">OK (2)</b>   — interval is halved; ease factor drops slightly</li>
           <li><b style="color:var(--c3)">Easy (3)</b> — interval grows; ease factor rises</li>
         </ul>
-        <p>Interval schedule: 1 day → 6 days → previous × ease factor (rounded), capped at 60 days.</p>
+        <p>Interval schedule: 1 day → 6 days → previous × ease factor (rounded), capped at ${MAX_INTERVAL_DAYS} days.</p>
         <p>When a slot is due for review today, its rhythm strips <b>pulse</b> in the progress grid.</p>
+        ${isCircleMode(vi, ri) ? `
+        <p style="color:#d4af37">This variation is in <b>Circle of 4ths mode</b>: one rating applies to all 12 keys at once, representing an unbroken run through the whole circle rather than per-key drilling. Click the column header again to turn it off.</p>
+        ` : ''}
       </div>
     </details>`;
 }
@@ -1564,7 +1669,10 @@ function buildGrid() {
 
   // Header row
   let h = '<thead><tr><th></th>';
-  uvars.forEach(v => { h += `<th title="${v.name}">${activeUniverse === 'modes' ? v.name : v.abbr}</th>`; });
+  uvars.forEach((v, vIdx) => {
+    const label = activeUniverse === 'modes' ? v.name : v.abbr;
+    h += `<th data-v="${vIdx}" title="Click to toggle Circle of 4ths mode for ${v.name}">${label}</th>`;
+  });
   h += '</tr></thead><tbody>';
 
   // Data rows: one per key
@@ -1582,6 +1690,15 @@ function buildGrid() {
   });
   h += '</tbody>';
   tbl.innerHTML = h;
+
+  // Header click → toggle Circle of 4ths mode for that variation (all 4 rhythms)
+  tbl.querySelectorAll('thead th[data-v]').forEach(th => {
+    th.addEventListener('click', () => {
+      toggleCircleMode(+th.dataset.v);
+      renderGrid();
+      renderInfo();
+    });
+  });
 
   // Strip click → jump to that exact key + variation + rhythm
   tbl.querySelectorAll('.strip').forEach(strip => {
@@ -1615,6 +1732,20 @@ function buildGrid() {
 }
 
 function renderGrid() {
+  const uvars = universeVars();
+
+  // Header: gold accent + icon + tooltip when that variation is in Circle of 4ths mode
+  document.querySelectorAll('thead th[data-v]').forEach(th => {
+    const v      = +th.dataset.v;
+    const on     = isCircleMode(v, 0);
+    const label  = activeUniverse === 'modes' ? uvars[v].name : uvars[v].abbr;
+    th.className = on ? 'circle-on' : '';
+    th.textContent = on ? `\u{1F501} ${label}` : label;
+    th.title = on
+      ? `Circle of 4ths mode is ON for ${uvars[v].name} — one rating applies to all 12 keys. Click to turn off.`
+      : `Click to toggle Circle of 4ths mode for ${uvars[v].name}`;
+  });
+
   // Each strip is coloured independently by its own comfort level
   document.querySelectorAll('.strip').forEach(strip => {
     const k       = +strip.dataset.k;
@@ -1623,18 +1754,23 @@ function renderGrid() {
     const comfort = (db[dbKey(k, v, r)] || {}).comfort || 0;
     const activeR = (k === ki && v === vi && r === ri);
     const due     = isDue(k, v, r);
-    strip.className   = `strip ${COMFORT_CLASS[comfort]}${activeR ? ' r-active' : ''}${due ? ' due' : ''}`;
+    const circle  = isCircleMode(v, r);
+    strip.className   = `strip ${COMFORT_CLASS[comfort]}${activeR ? ' r-active' : ''}${due ? ' due' : ''}${circle ? ' circle-on' : ''}`;
     if (!due) strip.style.filter = '';  // clear any brightness value left by the pulse animation
     strip.textContent = RHYTHMS[r].sym;
+    strip.title = circle
+      ? `${uvars[v].name} · ${RHYTHMS[r].name} · Circle of 4ths mode — rating applies to all 12 keys`
+      : `${uvars[v].name} · ${RHYTHMS[r].name}`;
   });
 
   // gcell: blue ring if selected; due strips pulse via CSS animation
   document.querySelectorAll('.gcell').forEach(cell => {
-    const k   = +cell.dataset.k;
-    const v   = +cell.dataset.v;
-    const sel = k === ki && v === vi;
-    const due = RHYTHMS.some((_, r) => isDue(k, v, r));
-    cell.className = `gcell${sel ? ' sel' : ''}${due ? ' due' : ''}`;
+    const k      = +cell.dataset.k;
+    const v      = +cell.dataset.v;
+    const sel    = k === ki && v === vi;
+    const due    = RHYTHMS.some((_, r) => isDue(k, v, r));
+    const circle = isCircleMode(v, 0);
+    cell.className = `gcell${sel ? ' sel' : ''}${due ? ' due' : ''}${circle ? ' circle-on' : ''}`;
   });
 }
 
@@ -1665,7 +1801,7 @@ document.addEventListener('keydown', e => {
 // ─── Export / Import ──────────────────────────────────────────────────────────
 
 function exportData() {
-  const payload = { db, bpm, sr, notes, historyLog, exportedAt: new Date().toISOString() };
+  const payload = { db, bpm, sr, notes, historyLog, circleMode, exportedAt: new Date().toISOString() };
   const blob    = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement('a');
@@ -1686,6 +1822,7 @@ function importData(file) {
       sr    = data.sr    || {};
       notes = data.notes || {};
       historyLog = Array.isArray(data.historyLog) ? data.historyLog : [];
+      circleMode = data.circleMode || {};
       save();
       saveNotes();
       saveHistory();

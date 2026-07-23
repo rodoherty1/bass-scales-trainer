@@ -8,10 +8,11 @@ An offline, single-file bass guitar scale practice app with spaced repetition sc
 - **12 keys** per universe — Major/Modes follow the circle of fifths (C, F, Bb…); Natural Minor uses its own key set (A, E, D, B, G, F#…)
 - **8 playing variations** per scale (2 Octaves, Fretboard, 4-Note Seq, 3-Note Seq, Sequential Seconds, Lower/Upper Neighbour, 1231)
 - **4 rhythmic variations** per slot (Quarter, Eighth, Triplet, 16th)
-- **SM-2 spaced repetition** — each slot is scheduled independently; due slots pulse in the grid
+- **SM-2 spaced repetition** — each slot is scheduled independently; due slots pulse in the grid; interval growth is capped at 30 days
 - **Comfort ratings** — 1 (Hard), 2 (Getting there), 3 (Comfortable) — with undo and clear support
 - **Built-in metronome** — BPM stored per slot, with mute and tap-to-play
-- **Hall of Reps** — physics-inspired visualisation of practice history; balls drop and stack by colour (red/amber/green)
+- **Circle of 4ths mode** — click a column header to toggle it; one rating then applies to all 12 keys at once, for practising a variation as an unbroken run through the circle rather than key-by-key. Reversible at any time; the due-count badge counts a circle-mode variation once, not per key
+- **Hall of Reps** — physics-inspired visualisation of practice history; balls drop and stack by colour (red/amber/green); circle-of-4ths reps land with a gold ring
 - **Progress grid** — at-a-glance view of all keys × variations × rhythms
 - **Notes** — per-slot freeform text notes
 - **Export / Import** — full JSON backup and restore
