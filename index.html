@@ -945,9 +945,12 @@ function drawHistory() {
     ctx.fillStyle = HALL_COLORS[b.c] || '#8b949e';
     ctx.fill();
     if (b.special) {
+      ctx.shadowBlur  = R * 1.2;           // soft gold halo, scaled to ball size
+      ctx.shadowColor = CIRCLE_RING_COLOR;
       ctx.lineWidth   = Math.max(1, R * 0.25);
       ctx.strokeStyle = CIRCLE_RING_COLOR;
       ctx.stroke();
+      ctx.shadowBlur  = 0;                // reset — shadow state isn't scoped to this shape
     }
   });
 
@@ -1020,6 +1023,7 @@ function processDropQueue() {
           }
           drawHistory();
           ctx.save();
+          if (special) { ctx.shadowBlur = R * 1.5; ctx.shadowColor = CIRCLE_RING_COLOR; }
 
           // Outer ring: fast, wide, fully opaque at start
           const t1 = sf / SPLASH_FRAMES;
@@ -1055,9 +1059,12 @@ function processDropQueue() {
       ctx.fillStyle = HALL_COLORS[comfort] || '#8b949e';
       ctx.fill();
       if (special) {
+        ctx.shadowBlur  = R * 1.2;
+        ctx.shadowColor = CIRCLE_RING_COLOR;
         ctx.lineWidth   = Math.max(1, R * 0.25);
         ctx.strokeStyle = CIRCLE_RING_COLOR;
         ctx.stroke();
+        ctx.shadowBlur  = 0;
       }
       requestAnimationFrame(frame);
     }
