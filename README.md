@@ -37,6 +37,8 @@ All data is stored in `localStorage`. Use Export to create a backup JSON file.
 | `[` / `]` | BPM ±5 |
 | `,` / `.` | BPM ±1 |
 
+Click the scale photo to view it fullscreen. While fullscreen, `←` / `→` cycle to the previous/next key around the circle of 4ths (e.g. C major → F major → Bb major…; A minor → D minor → G minor…); `Esc` closes it.
+
 ## Photos
 
 Scale fingering photos live under universe-specific subfolders:

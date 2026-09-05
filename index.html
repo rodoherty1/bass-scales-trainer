@@ -1308,6 +1308,18 @@ function updateMetroUI() {
 
 // ─── Scale photo ──────────────────────────────────────────────────────────────
 
+// Keeps the fullscreen lightbox image in sync with #photo-img whenever the
+// underlying photo changes (grid click, arrow-key navigation, etc.) while the
+// lightbox happens to be open. No-op if the lightbox is closed.
+function syncLightboxImage() {
+  const overlay = document.getElementById('lightbox');
+  if (!overlay.classList.contains('open')) return;
+  const photoImg = document.getElementById('photo-img');
+  const lbImg    = document.getElementById('lightbox-img');
+  lbImg.src = photoImg.src;
+  lbImg.alt = photoImg.alt;
+}
+
 function showScaleImage(k, v) {
   const img         = document.getElementById('photo-img');
   const placeholder = document.getElementById('photo-placeholder');
@@ -1337,11 +1349,13 @@ function showScaleImage(k, v) {
     } else {
       img.style.display = 'none';
       placeholder.textContent = `No photo yet for:\n${ukeys[k]} ${VARS[v].name}`;
+      syncLightboxImage();
     }
   };
   img.onload = () => {
     placeholder.style.display = 'none';
     img.style.display = 'block';
+    syncLightboxImage();
   };
   img.alt = `${ukeys[k]} ${VARS[v].name}`;
   img.src = `${folder}/pngs/${stem}.png`;
@@ -1814,6 +1828,19 @@ function renderGrid() {
 document.addEventListener('keydown', e => {
   if (document.activeElement === document.getElementById('notes-area')) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+  // While the scale photo is fullscreen, Left/Right cycle keys around the
+  // circle of 4ths (KEYS/MINOR_KEYS order); Up/Down are disabled so they
+  // don't conflict with normal grid key-navigation happening "behind" the modal.
+  const lightboxOpen = document.getElementById('lightbox').classList.contains('open');
+  if (lightboxOpen) {
+    switch (e.code) {
+      case 'ArrowUp': case 'ArrowDown': e.preventDefault(); return;
+      case 'ArrowLeft':  e.preventDefault(); navigate('pk'); return;
+      case 'ArrowRight': e.preventDefault(); navigate('nk'); return;
+    }
+  }
+
   switch (e.code) {
     case 'ArrowUp':      e.preventDefault(); navigate('pk'); break;
     case 'ArrowDown':    e.preventDefault(); navigate('nk'); break;
