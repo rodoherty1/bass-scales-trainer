@@ -13,7 +13,7 @@ An offline, single-file bass guitar scale practice app with spaced repetition sc
 - **Built-in metronome** — BPM stored per slot, with mute and tap-to-play
 - **Circle of 4ths mode** — click a column header to toggle it; one rating then applies to all 12 keys at once, for practising a variation as an unbroken run through the circle rather than key-by-key. Reversible at any time; the due-count badge counts a circle-mode variation once, not per key
 - **Hall of Reps** — physics-inspired visualisation of practice history; balls drop and stack by colour (red/amber/green); circle-of-4ths reps land with a gold ring
-- **Progress grid** — at-a-glance view of all keys × variations × rhythms
+- **Progress grid** — at-a-glance view of all keys × variations × rhythms; hover any cell to see when it was last reviewed
 - **Notes** — per-slot freeform text notes
 - **Export / Import** — full JSON backup and restore
 

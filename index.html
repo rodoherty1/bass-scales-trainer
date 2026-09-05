@@ -850,6 +850,16 @@ function load() {
     if (Object.keys(prunedCircle).length !== beforeCircle) { circleMode = prunedCircle; migrated = true; }
   }
 
+  // Migration D: backfill lastReviewed for sr entries rated before this field
+  // existed. Approximated from dueDate − interval (exact at day granularity,
+  // since dueDate was originally computed as "review day + interval days").
+  Object.values(sr).forEach(item => {
+    if (!item.lastReviewed) {
+      item.lastReviewed = item.dueDate - item.interval * 86_400_000;
+      migrated = true;
+    }
+  });
+
   if (migrated) save();
 }
 
@@ -1132,7 +1142,8 @@ function sm2Update(k, v, r, quality) {
   // Adjust ease factor — easy ratings grow by 0.05 (halved) to slow interval expansion
   item.easeFactor = Math.max(1.3,
     item.easeFactor + 0.05 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-  item.dueDate = startOfDay(Date.now() + item.interval * 86_400_000);
+  item.dueDate      = startOfDay(Date.now() + item.interval * 86_400_000);
+  item.lastReviewed = Date.now();   // exact timestamp of this rating
 }
 
 // Returns the Unix timestamp for midnight (local time) of the day containing ts
@@ -1144,6 +1155,15 @@ function startOfDay(ts) {
 function isDue(k, v, r) {
   const item = sr[srKey(k, v, r)];
   return !!item && item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now());
+}
+
+// Human-readable "Last reviewed" line for tooltips/info panel; "Never reviewed"
+// if the slot has no sr record yet (never rated).
+function lastReviewedLabel(k, v, r) {
+  const item = sr[srKey(k, v, r)];
+  if (!item || !item.lastReviewed) return 'Never reviewed';
+  const d = new Date(item.lastReviewed);
+  return `Last reviewed: ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
 // ─── Universe switching ────────────────────────────────────────────────────────
@@ -1628,8 +1648,9 @@ Rate it with <b>1</b>, <b>2</b>, or <b>3</b> to start tracking.</p>`;
     const isOverdue = startOfDay(item.dueDate) <= startOfDay(now);
     const dueDate   = new Date(item.dueDate);
     const dateStr   = dueDate.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
-    // Approximate last-reviewed date from dueDate − interval
-    const lastDate  = new Date(item.dueDate - item.interval * 86_400_000);
+    // Exact timestamp of the last rating (falls back to derived approximation
+    // for legacy entries predating the lastReviewed field/migration).
+    const lastDate  = new Date(item.lastReviewed || (item.dueDate - item.interval * 86_400_000));
     const lastStr   = lastDate.toLocaleDateString(undefined, { day:'numeric', month:'short', year:'numeric' });
 
     srHtml = `
@@ -1808,8 +1829,8 @@ function renderGrid() {
     if (!due) strip.style.filter = '';  // clear any brightness value left by the pulse animation
     strip.textContent = RHYTHMS[r].sym;
     strip.title = circle
-      ? `${uvars[v].name} · ${RHYTHMS[r].name} · Circle of 4ths mode — rating applies to all 12 keys`
-      : `${uvars[v].name} · ${RHYTHMS[r].name}`;
+      ? `${uvars[v].name} · ${RHYTHMS[r].name} · Circle of 4ths mode — rating applies to all 12 keys · ${lastReviewedLabel(k, v, r)}`
+      : `${uvars[v].name} · ${RHYTHMS[r].name} · ${lastReviewedLabel(k, v, r)}`;
   });
 
   // gcell: blue ring if selected; due strips pulse via CSS animation
