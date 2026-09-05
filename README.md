@@ -7,7 +7,7 @@ An offline, single-file bass guitar scale practice app with spaced repetition sc
 - **Five universes of material:** Major scales, Natural Minor scales, Modes (Dorian–Locrian, key-derived), with Pentatonic and Arpeggios planned
 - **12 keys** per universe — Major/Modes follow the circle of fifths (C, F, Bb…); Natural Minor uses its own key set (A, E, D, B, G, F#…)
 - **8 playing variations** per scale (2 Octaves, Fretboard, 4-Note Seq, 3-Note Seq, Sequential Seconds, Lower/Upper Neighbour, 1231)
-- **4 rhythmic variations** per slot (Quarter, Eighth, Triplet, 16th)
+- **4 rhythmic variations** per slot (Quarter, Eighth, Triplet, 16th) — toggleable via the "RHYTHMS ON/OFF" pill; when off, only Quarter Note is shown/trained and the grid slot expands to fill the space of all 4. Other rhythms' data is preserved and reappears when re-enabled
 - **SM-2 spaced repetition** — each slot is scheduled independently; due slots pulse in the grid; interval growth is capped at 30 days
 - **Comfort ratings** — 1 (Hard), 2 (Getting there), 3 (Comfortable) — with undo and clear support
 - **Built-in metronome** — BPM stored per slot, with mute and tap-to-play

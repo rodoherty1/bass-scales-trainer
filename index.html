@@ -553,6 +553,7 @@
   <div class="pill-col">
     <div class="pill stopped" id="playPill" onclick="toggleMetro()">■ STOPPED</div>
     <div class="pill sounding" id="mutePill" onclick="toggleMute()">🔊 SOUND ON</div>
+    <div class="pill sounding" id="rhythmTogglePill" onclick="toggleRhythmVariations()" title="When off, only the first rhythm (Quarter Note) is shown and trained. Other rhythm data is preserved and reappears when turned back on.">🎵 RHYTHMS ON</div>
   </div>
 
   <div class="sep"></div>
@@ -744,6 +745,11 @@ let ki  = 0;   // current key index
 let vi  = 0;   // current variation/mode index
 let ri  = 0;   // current rhythm index
 let bpm = 80;
+
+// Rhythm variations toggle — when off, only RHYTHMS[0] (Quarter Note) is shown
+// and trained; ri is pinned to 0. Data for the other 3 rhythms is left
+// untouched in db/sr and reappears exactly as it was when re-enabled.
+let rhythmVariationsOn = true;
 let db  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → { comfort: 0–3, bpm }
 let sr  = {};  // "UNIVERSE|KEY|VAR|RHYTHM" → SM-2 record
 let activeUniverse = 'scales';  // 'scales' | 'modes'
@@ -769,8 +775,9 @@ let dropCancelled = false;  // set by undoComfort() to abort an in-flight drop
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { const p = JSON.parse(raw); db = p.db || {}; bpm = p.bpm || 80; sr = p.sr || {}; circleMode = p.circleMode || {}; }
+    if (raw) { const p = JSON.parse(raw); db = p.db || {}; bpm = p.bpm || 80; sr = p.sr || {}; circleMode = p.circleMode || {}; rhythmVariationsOn = p.rhythmVariationsOn !== false; }
   } catch (_) {}
+  if (!rhythmVariationsOn) ri = 0;
 
   // Migration A: cap any intervals already above MAX_INTERVAL_DAYS and reschedule
   // them for a review MAX_INTERVAL_DAYS from now (rather than "due immediately"),
@@ -847,7 +854,7 @@ function load() {
 }
 
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ db, bpm, sr, circleMode })); } catch (_) {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ db, bpm, sr, circleMode, rhythmVariationsOn })); } catch (_) {}
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
@@ -1274,6 +1281,22 @@ function stopMetro() {
 function toggleMetro() { isPlaying ? stopMetro() : startMetro(); }
 function toggleMute()  { isMuted = !isMuted; updateMetroUI(); }
 
+function toggleRhythmVariations() {
+  rhythmVariationsOn = !rhythmVariationsOn;
+  if (!rhythmVariationsOn) ri = 0;   // pin to Quarter Note when turning off
+  save();
+  updateRhythmToggleUI();
+  buildGrid();   // cell structure changes (1 strip vs 4)
+  render();
+}
+
+function updateRhythmToggleUI() {
+  const pill = document.getElementById('rhythmTogglePill');
+  pill.textContent = rhythmVariationsOn ? '🎵 RHYTHMS ON' : '🎵 RHYTHMS OFF';
+  pill.className   = 'pill ' + (rhythmVariationsOn ? 'sounding' : 'muted');
+  document.getElementById('rhythmCtl').style.display = rhythmVariationsOn ? '' : 'none';
+}
+
 function updateMetroUI() {
   const pp = document.getElementById('playPill');
   const mp = document.getElementById('mutePill');
@@ -1333,7 +1356,7 @@ function navigate(action) {
     case 'nk': ki = (ki + 1)                          % universeKeys().length;   break;
     case 'pv': vi = (vi - 1 + uvars.length) % uvars.length;  break;
     case 'nv': vi = (vi + 1)                % uvars.length;  break;
-    case 'nr': ri = (ri + 1)                % RHYTHMS.length; break;
+    case 'nr': if (rhythmVariationsOn) ri = (ri + 1) % RHYTHMS.length; break;
   }
   // Navigating away clears the undo snapshot and EF delta
   undoState = null;
@@ -1541,13 +1564,15 @@ function renderStats() {
   let rated = 0, comfy = 0, dueCount = 0;
   Object.entries(db).forEach(([k, ent]) => {
     if (!k.startsWith(prefix)) return;
+    if (!rhythmVariationsOn && k.split('|')[3] !== RHYTHMS[0].name) return;
     if (ent.comfort > 0) rated++;
     if (ent.comfort === 3) comfy++;
   });
-  universeKeys().forEach((_, k) => uvars.forEach((_, v) => RHYTHMS.forEach((_, r) => {
+  const rhythmsToCount = rhythmVariationsOn ? RHYTHMS : [RHYTHMS[0]];
+  universeKeys().forEach((_, k) => uvars.forEach((_, v) => rhythmsToCount.forEach((_, r) => {
     if (isDue(k, v, r)) dueCount++;
   })));
-  const total    = universeKeys().length * uvars.length * RHYTHMS.length;
+  const total    = universeKeys().length * uvars.length * rhythmsToCount.length;
   // Circle of 4ths slots broadcast one rating to all 12 keys, so their due dates
   // are always identical — count each (universe|variation|rhythm) group once
   // rather than once per key, or the badge would overstate the backlog by 12x.
@@ -1556,6 +1581,7 @@ function renderStats() {
   Object.entries(sr).forEach(([key, item]) => {
     if (!(item.dueDate > 0 && startOfDay(item.dueDate) <= startOfDay(Date.now()))) return;
     const [univ, , varName, rhythm] = key.split('|');
+    if (!rhythmVariationsOn && rhythm !== RHYTHMS[0].name) return;
     const groupKey = `${univ}|${varName}|${rhythm}`;
     if (circleMode[groupKey]) {
       if (seenCircleGroups.has(groupKey)) return;
@@ -1686,9 +1712,11 @@ function buildGrid() {
   universeKeys().forEach((key, k) => {
     h += `<tr><td class="key-lbl">${key}</td>`;
     uvars.forEach((_, v) => {
-      // Each cell = 4 strips, one per rhythm
+      // Each cell = 4 strips (one per rhythm), or 1 full-width strip when
+      // rhythm variations are toggled off.
       h += `<td><div class="gcell" data-k="${k}" data-v="${v}">`;
-      RHYTHMS.forEach((rh, r) => {
+      const rhythmsToShow = rhythmVariationsOn ? RHYTHMS : [RHYTHMS[0]];
+      rhythmsToShow.forEach((rh, r) => {
         h += `<div class="strip g0" data-k="${k}" data-v="${v}" data-r="${r}">${rh.sym}</div>`;
       });
       h += `</div></td>`;
@@ -1775,7 +1803,7 @@ function renderGrid() {
     const k      = +cell.dataset.k;
     const v      = +cell.dataset.v;
     const sel    = k === ki && v === vi;
-    const due    = RHYTHMS.some((_, r) => isDue(k, v, r));
+    const due    = rhythmVariationsOn ? RHYTHMS.some((_, r) => isDue(k, v, r)) : isDue(k, v, 0);
     const circle = isCircleMode(v, 0);
     cell.className = `gcell${sel ? ' sel' : ''}${due ? ' due' : ''}${circle ? ' circle-on' : ''}`;
   });
@@ -1888,6 +1916,7 @@ document.getElementById('rhythmCtl').addEventListener('click', () => navigate('n
 load();
 loadNotes();
 loadHistory();
+updateRhythmToggleUI();
 buildGrid();
 initTabs();
 switchTab('photo');   // initial tab — stays sticky after this
