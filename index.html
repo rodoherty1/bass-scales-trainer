@@ -667,7 +667,7 @@
 <script>
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const KEYS = ['C','F','Bb','Eb','Ab','Db','Gb','B','E','A','D','G'];
+const KEYS = ['C','F','Bb','Eb','Ab','Db','F#','B','E','A','D','G'];
 
 const VARS = [
   { name: 'Regular 2 Octaves',        abbr: '2 Oct',  slug: '2-octaves'   },
@@ -683,7 +683,7 @@ const VARS = [
 // Filename slug for each key (lowercase, filesystem-safe)
 const KEY_SLUGS = {
   'C':'c', 'F':'f', 'Bb':'bb', 'Eb':'eb', 'Ab':'ab', 'Db':'db',
-  'Gb':'gb', 'B':'b', 'E':'e', 'A':'a', 'D':'d', 'G':'g',
+  'F#':'f-sharp', 'B':'b', 'E':'e', 'A':'a', 'D':'d', 'G':'g',
 };
 
 const RHYTHMS = [
@@ -709,7 +709,7 @@ const KEY_NOTES = {
   'Eb': ['Eb','F','G','Ab','Bb','C','D'],
   'Ab': ['Ab','Bb','C','Db','Eb','F','G'],
   'Db': ['Db','Eb','F','Gb','Ab','Bb','C'],
-  'Gb': ['Gb','Ab','Bb','Cb','Db','Eb','F'],
+  'F#': ['Gb','Ab','Bb','Cb','Db','Eb','F'],
   'B':  ['B','C#','D#','E','F#','G#','A#'],
   'E':  ['E','F#','G#','A','B','C#','D#'],
   'A':  ['A','B','C#','D','E','F#','G#'],
@@ -808,6 +808,34 @@ function load() {
     migrated = true;
   }
 
+  // Migration B2: rename the "Gb" key to "F#" in db/sr (and the shared Modes
+  // universe, which uses the same key list) — the on-disk key label changed,
+  // but existing practice history/SM-2 records for this key should carry over
+  // rather than being pruned as "unrecognised" by Migration C below.
+  function renameGbToFSharp(key) {
+    const parts = key.split('|');
+    if (parts.length < 2) return key;
+    if ((parts[0] === 'scales' || parts[0] === 'modes') && parts[1] === 'Gb') {
+      parts[1] = 'F#';
+      return parts.join('|');
+    }
+    return key;
+  }
+  const anyGbDb = Object.keys(db).some(k => renameGbToFSharp(k) !== k);
+  if (anyGbDb) {
+    const m = {};
+    Object.entries(db).forEach(([k, v]) => { m[renameGbToFSharp(k)] = v; });
+    db = m;
+    migrated = true;
+  }
+  const anyGbSr = Object.keys(sr).some(k => renameGbToFSharp(k) !== k);
+  if (anyGbSr) {
+    const m = {};
+    Object.entries(sr).forEach(([k, v]) => { m[renameGbToFSharp(k)] = v; });
+    sr = m;
+    migrated = true;
+  }
+
   // Migration C: prune sr keys that no longer correspond to a renderable strip.
   // Covers: 3-part keys missing the rhythm segment, removed mode/variation names
   // (e.g. Ionian, Aeolian), and any rhythm name no longer in RHYTHMS.
@@ -880,6 +908,23 @@ function loadNotes() {
   if (anyLegacy) {
     const m = {};
     Object.entries(notes).forEach(([k, v]) => { m[needsPrefix(k) ? `scales|${k}` : k] = v; });
+    notes = m;
+    saveNotes();
+  }
+  // Migration: rename the "Gb" key to "F#" (see Migration B2 in load())
+  function renameGbToFSharp(key) {
+    const parts = key.split('|');
+    if (parts.length < 2) return key;
+    if ((parts[0] === 'scales' || parts[0] === 'modes') && parts[1] === 'Gb') {
+      parts[1] = 'F#';
+      return parts.join('|');
+    }
+    return key;
+  }
+  const anyGb = Object.keys(notes).some(k => renameGbToFSharp(k) !== k);
+  if (anyGb) {
+    const m = {};
+    Object.entries(notes).forEach(([k, v]) => { m[renameGbToFSharp(k)] = v; });
     notes = m;
     saveNotes();
   }
